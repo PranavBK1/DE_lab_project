@@ -23,6 +23,9 @@
 CREATE OR REPLACE FUNCTION movie_stats_sync() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    k     INT;      -- histogram slot of a rating: 0.5 -> 1, 1.0 -> 2, ..., 5.0 -> 10
+    first INT[];    -- histogram of a movie's very first rating
 BEGIN
     -- An UPDATE that changes neither the movie nor the rating (e.g. only
     -- rated_at) does not affect the stats.
@@ -34,20 +37,26 @@ BEGIN
 
     -- Remove the old rating (DELETE, or the "before" half of an UPDATE).
     IF TG_OP IN ('DELETE', 'UPDATE') THEN
+        k := (OLD.rating * 2)::int;
         UPDATE movie_stats
-           SET rating_count = rating_count - 1,
-               rating_sum   = rating_sum   - OLD.rating
+           SET rating_count   = rating_count - 1,
+               rating_sum     = rating_sum   - OLD.rating,
+               rating_hist[k] = rating_hist[k] - 1
          WHERE movie_id = OLD.movie_id;
     END IF;
 
     -- Add the new rating (INSERT, or the "after" half of an UPDATE).
     -- Creates the movie_stats row if this movie has never been rated.
     IF TG_OP IN ('INSERT', 'UPDATE') THEN
-        INSERT INTO movie_stats (movie_id, rating_count, rating_sum)
-        VALUES (NEW.movie_id, 1, NEW.rating)
+        k := (NEW.rating * 2)::int;
+        first := array_fill(0, ARRAY[10]);
+        first[k] := 1;
+        INSERT INTO movie_stats (movie_id, rating_count, rating_sum, rating_hist)
+        VALUES (NEW.movie_id, 1, NEW.rating, first)
         ON CONFLICT (movie_id) DO UPDATE
-           SET rating_count = movie_stats.rating_count + 1,
-               rating_sum   = movie_stats.rating_sum   + EXCLUDED.rating_sum;
+           SET rating_count   = movie_stats.rating_count + 1,
+               rating_sum     = movie_stats.rating_sum   + EXCLUDED.rating_sum,
+               rating_hist[k] = movie_stats.rating_hist[k] + 1;
     END IF;
 
     RETURN NULL;   -- return value is ignored for AFTER triggers

@@ -86,12 +86,11 @@ def main():
     ]
     out += [f"| {l} | {c:.2f} | {w:.2f} | {'PASS' if ok else '**FAIL**'} |" for l, c, w, ok in rows]
     out += ["", f"**{sum(r[3] for r in rows)} of {len(rows)} pass.**", ""]
-    out += ["## Known issue: (d) for blockbusters on a cold cache", "",
-            "Page (d) for a movie with tens of thousands of ratings reads that movie's ratings from about "
-            "53,000 pages of the 1.2 GB `ratings` table, which this laptop cannot keep in memory. A cold "
-            "load takes 8–10 s; once loaded, the page is served from `st.cache_data` in under 0.1 s for "
-            "10 minutes, or until the next rating change clears the cache. The fix options are listed in "
-            "[query_performance.md](query_performance.md) and await approval.", ""]
+    out += ["## Page (d) and blockbusters", "",
+            "Page (d) used to take 6–10 s on a cold cache for blockbusters, because their ratings are spread "
+            "over ~53,000 pages of the 1.2 GB `ratings` table. It now reads the stored histogram "
+            "`movie_stats.rating_hist` (one row), so blockbusters load as fast as any other movie. "
+            "See [query_performance.md](query_performance.md).", ""]
     REPORT.write_text("\n".join(out), encoding="utf-8")
     print(f"wrote {REPORT.relative_to(ROOT)}")
 

@@ -124,22 +124,14 @@ def main():
             "The query then takes each genre's top N from the index `mv_popular_tags_genre_rank_idx` (LATERAL + LIMIT) "
             "instead of sorting all 271k (genre, tag) rows, which spilled to disk and took about 1.5 s.",
             "",
-            "## Known issue: question (d) for blockbusters", "",
-            "`d_rating_distribution` reads every rating of one movie through `ratings_movie_idx`. Those rows are "
-            "spread over the 1.2 GB `ratings` table, because it is stored in user order. A blockbuster's ratings "
-            "sit on about 53,000 different pages (about 410 MB). This laptop has 0.8 GB of free RAM and "
-            "PostgreSQL's default shared_buffers of 128 MB, so the table cannot stay in memory. Each "
-            "blockbuster therefore takes 6–10 s (Forrest Gump, The Matrix, Toy Story), while a movie with a "
-            "few hundred ratings stays under 1 s. In Phase 6 the table happened to be in the OS cache, which "
-            "gave about 0.4 s. Fix options, each awaiting approval because each touches the 25M-row table or "
-            "the (d) definition:",
-            "",
-            "1. a covering index `ratings (movie_id, rating)` (about 0.5 GB, plus VACUUM after the load so "
-            "index-only scans need no heap reads);",
-            "2. a 10-value rating histogram per movie in `movie_stats`, kept by the existing trigger, so (d) "
-            "reads one row (no new index, the same output);",
-            "3. physically ordering `ratings` by movie (COPY sorted by movie_id, or CLUSTER), so one movie's "
-            "ratings sit on a few hundred pages.",
+            "## Why question (d) reads a stored histogram", "",
+            "Counting one movie's ratings in `ratings` was slow for blockbusters: the 1.2 GB table is stored in "
+            "user order, so a movie with ~80k ratings has them on about 53,000 different pages (about 410 MB). "
+            "With little free RAM that took 6–10 s on a cold cache (Forrest Gump, The Matrix, Toy Story). "
+            "`movie_stats.rating_hist` now stores each movie's 10 rating counts (0.5–5.0 stars), maintained by "
+            "the ratings trigger and guarded by a CHECK that they add up to `rating_count` "
+            "(`sql/migrations/003_rating_histogram.sql`), so (d) reads one row. The output is unchanged and is "
+            "still tested against pandas.",
             ""]
     for label, plan in failures:
         out += [f"## FAIL: {label}", "", "```", plan, "```", ""]

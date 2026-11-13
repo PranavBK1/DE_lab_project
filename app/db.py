@@ -57,6 +57,10 @@ def _pool(role):
             "password": os.environ[ROLES[role]],
             "connect_timeout": 5,
             "application_name": "movielens-dashboard",
+            # No server-side prepared statements: after a reload or migration a pooled
+            # connection could otherwise reuse a plan made for the old tables and fail
+            # ("cached plan must not change result type"). Queries are fast without them.
+            "prepare_threshold": None,
         },
         min_size=1,
         max_size=4,
@@ -68,6 +72,12 @@ def _pool(role):
     )
     atexit.register(pool.close)
     return pool
+
+
+def reset_pools():
+    """Close and forget every connection pool, so the next query opens fresh
+    connections (used after a database error, e.g. when the DB was reloaded)."""
+    _pool.clear()
 
 
 @contextmanager

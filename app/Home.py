@@ -14,11 +14,12 @@
 """
 import logging
 
+import psycopg
 import streamlit as st
 
 from auth import LOGIN_FAILED, current_user, login, logout
 from components import show_flash
-from db import DB_UNAVAILABLE
+from db import DB_UNAVAILABLE, reset_pools
 from navigation import LOGIN, pages_for
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -68,3 +69,12 @@ try:
 except DB_UNAVAILABLE as exc:
     log.error("database unavailable: %r", exc)
     st.error("Database unavailable, please try again.")
+except psycopg.Error as exc:
+    # Any other database error, e.g. a table missing or changed because the
+    # database is being reloaded or migrated. Never show a traceback; drop the
+    # pooled connections and cached results so the next try starts clean.
+    log.error("database error on page %s: %r", page.title, exc)
+    reset_pools()
+    st.cache_data.clear()
+    st.error("The database returned an error. If it is being reloaded or updated, "
+             "wait a minute and refresh the page.")

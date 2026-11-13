@@ -245,6 +245,17 @@ def reconcile(conn, csv_rows):
             "SELECT round(avg(rating), 3) FROM ratings WHERE movie_id = %s", (movie_id,)
         ).fetchone()[0]
         check(stats_results, f"avg_rating of random movie {movie_id}", stats_avg, direct)
+    # rating_hist (question d): the CHECK constraint already forces sum = rating_count;
+    # here one random blockbuster's histogram is also recomputed straight from ratings.
+    movie_id, hist = conn.execute(
+        "SELECT movie_id, rating_hist FROM movie_stats WHERE rating_count > 1000 "
+        "ORDER BY random() LIMIT 1").fetchone()
+    direct = [r[0] for r in conn.execute(
+        "SELECT count(r.rating) FROM generate_series(1, 10) k "
+        "LEFT JOIN ratings r ON r.movie_id = %s AND r.rating = k / 2.0 "
+        "GROUP BY k ORDER BY k", (movie_id,))]
+    check(stats_results, f"rating_hist of random movie {movie_id}", "same" if hist == direct else str(hist),
+          "same" if hist == direct else str(direct))
     done(t0)
     return table_results, stats_results
 
@@ -398,9 +409,17 @@ def full_load():
         csv_rows = load_csvs(conn)
 
         t0 = header(4, "Populate movie_stats from ratings")
+        # rating_hist[k] = ratings equal to k/2 stars (k = 1..10), used by question (d).
         cur = conn.execute("""
-            INSERT INTO movie_stats (movie_id, rating_count, rating_sum)
-            SELECT movie_id, count(*), sum(rating) FROM ratings GROUP BY movie_id""")
+            INSERT INTO movie_stats (movie_id, rating_count, rating_sum, rating_hist)
+            SELECT movie_id, count(*), sum(rating),
+                   ARRAY[count(*) FILTER (WHERE rating = 0.5), count(*) FILTER (WHERE rating = 1.0),
+                         count(*) FILTER (WHERE rating = 1.5), count(*) FILTER (WHERE rating = 2.0),
+                         count(*) FILTER (WHERE rating = 2.5), count(*) FILTER (WHERE rating = 3.0),
+                         count(*) FILTER (WHERE rating = 3.5), count(*) FILTER (WHERE rating = 4.0),
+                         count(*) FILTER (WHERE rating = 4.5), count(*) FILTER (WHERE rating = 5.0)
+                   ]::int[]
+              FROM ratings GROUP BY movie_id""")
         print(f"    {cur.rowcount:,} movies have at least one rating")
         done(t0)
 

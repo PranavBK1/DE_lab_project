@@ -146,7 +146,17 @@ CREATE TABLE movie_stats (
     rating_count  INT           NOT NULL DEFAULT 0 CHECK (rating_count >= 0),
     rating_sum    NUMERIC(12,1) NOT NULL DEFAULT 0,
     avg_rating    NUMERIC(4,3)  GENERATED ALWAYS AS
-                  (CASE WHEN rating_count > 0 THEN rating_sum / rating_count END) STORED
+                  (CASE WHEN rating_count > 0 THEN rating_sum / rating_count END) STORED,
+    -- Rating histogram for question (d): rating_hist[k] = number of ratings
+    -- equal to k/2 stars (k = 1..10, i.e. 0.5 .. 5.0). Reading one row is far
+    -- faster than counting a blockbuster's ~80k ratings scattered across the
+    -- 1.2 GB ratings table. The CHECK guarantees it always agrees with rating_count.
+    rating_hist   INT[]         NOT NULL DEFAULT '{0,0,0,0,0,0,0,0,0,0}',
+    CONSTRAINT movie_stats_hist_valid CHECK (
+        cardinality(rating_hist) = 10
+        AND rating_hist[1] + rating_hist[2] + rating_hist[3] + rating_hist[4] + rating_hist[5]
+          + rating_hist[6] + rating_hist[7] + rating_hist[8] + rating_hist[9] + rating_hist[10]
+          = rating_count)
 );
 COMMENT ON TABLE movie_stats IS
     'Denormalised per-movie rating count/sum/avg, maintained by trigger ratings_movie_stats.';

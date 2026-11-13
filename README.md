@@ -4,6 +4,20 @@ DS5003 Data Engineering Lab, IIT Palakkad.
 
 This project loads the MovieLens 25M dataset into PostgreSQL, analyses it with SQL, and serves a Streamlit dashboard with login and roles (admin and user). The dashboard answers questions (a)–(g).
 
+## Quick start (Windows)
+
+1. Install **Python 3.11+** (tick "Add python.exe to PATH") and **PostgreSQL 17**
+   (keep port 5432 and remember the password you give the `postgres` user).
+2. Copy `.env.example` to `.env` and replace every `change-me`. `PG_SUPERPASSWORD`
+   is your `postgres` password; the others are new passwords of your choice.
+3. Double-click **`setup.bat`**. It creates `.venv`, installs the packages,
+   downloads MovieLens 25M, cleans it and loads PostgreSQL (about 30–45 minutes
+   the first time).
+4. Double-click **`run_app.bat`** and open http://localhost:8501. Log in as
+   `admin` or `demo_user1` with the passwords from `.env`.
+
+The same steps by hand are below under Setup, Run the pipeline and Run the app.
+
 ## Stack
 - PostgreSQL 17: tables, DB roles, triggers
 - Python 3.11+ with pandas, SQLAlchemy and psycopg 3
@@ -92,8 +106,7 @@ again" instead of an error trace.
 Every analysis page has a "Show data table" toggle under its chart.
 
 ### Browser check list
-Use the passwords from `.env`. Steps 6–8 use *Sabrina (1995)* (12k ratings, loads in under 1 s); see
-Known behaviour for blockbusters on page (d).
+Use the passwords from `.env`. Steps 6–8 use *Sabrina (1995)*; any movie works, blockbusters included.
 
 1. Open http://localhost:8501 while logged out. Only **Log in** is in the menu, and there is no Admin entry.
 2. Log in as `demo_user1`. The sidebar shows "Logged in as **demo_user1** (user)", and the menu has Overview, (a)–(g) and My ratings, **but no Admin**.
@@ -151,7 +164,7 @@ Start `streamlit run app/Home.py` and open http://localhost:8501. Use the passwo
 
 ## Known behaviour
 - Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id` and `movies.movie_id`.
-- **Page (d) for blockbusters is slow the first time (6–10 s)**, e.g. Forrest Gump, The Matrix or Toy Story. Their ratings are spread over about 53,000 pages of the 1.2 GB `ratings` table, which this laptop cannot keep in memory. After the first load, the page comes from the cache in under 0.1 s, until the next rating change clears it. A movie with a few hundred ratings takes under 1 s. The fix options are in [reports/query_performance.md](reports/query_performance.md).
+- **Page (d) reads a stored histogram.** `movie_stats.rating_hist` holds each movie's 10 rating counts (0.5–5.0 stars), kept current by the ratings trigger and guarded by a CHECK that it always adds up to `rating_count` (migration `003_rating_histogram.sql`). Before this, a blockbuster such as Forrest Gump took 6–10 s on a cold cache, because its ~80k ratings are spread over ~53,000 pages of the 1.2 GB `ratings` table; now it takes a few milliseconds.
 - The (c) tag counts and the Overview's tag / genome / rating-period tiles come from materialized views built at load time. An admin's genre edits show up in (c) after the next `python etl/migrate.py` or full load.
 
 ## Project layout

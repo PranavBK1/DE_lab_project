@@ -63,14 +63,13 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - movies.movie_id is an identity column (migration 002; load.py restarts it after COPY).
    - mv_dataset_summary (sql/analysis.sql, granted in roles.sql) holds the Overview's slow facts (tags, genome movies, rating period).
    - client.showErrorDetails = "none" (in Streamlit 1.50, `false` means "stacktrace").
-   - OPEN: page (d) for blockbusters takes 6–10 s cold (the ratings table cannot stay in memory). Options are in reports/query_performance.md and await approval.
+   - (d) reads movie_stats.rating_hist (INT[10], rating_hist[k] = ratings equal to k/2 stars), maintained by the ratings trigger and guarded by CHECK sum = rating_count (migration 003; load.py fills it). This fixed the 6–10 s cold load for blockbusters.
    - Login, then a sidebar filtered by role. One page per question, each with a chart and a "show table" toggle.
    - Controls: title autocomplete (a, d), year selector (b, f), genre selector (c), min-ratings slider (b).
    - My Ratings page. Admin page.
    - Use st.cache_data and clear it after a rating changes.
    - The Admin page must catch ForeignKeyViolation when deleting a user and show a clear message, or offer to delete that user's ratings and tags first after confirmation. (ratings/tags FKs to users have no ON DELETE CASCADE, on purpose.)
-8. **Testing**: run all tests, click through both roles, take screenshots, write the README.
-9. **Slides**: 12–15 slides (title, problem, architecture, cleaning, ER, security, a–g, demo script, learnings).
+8. **Testing, docs and slides** (DONE): full reload verified with the histogram, 137 tests passing (AppTest runs every page for both roles), 22/22 queries and 12/12 pages within target, login checked in a real browser, README quick start plus setup.bat / run_app.bat, and a 15-slide deck (Slides artifact) covering problem, architecture, cleaning, schema, load, performance, security, questions (a)–(g), findings, testing, demo script and learnings. The project is complete.
 
 ## 6. Rules
 - Ask before changing the stack decisions or the Phase 6 definitions.
