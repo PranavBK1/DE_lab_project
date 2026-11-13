@@ -7,6 +7,7 @@
 --
 --   tag_stoplist           junk tags excluded from question (c), kept in ONE place
 --   mv_popular_tags_genre  per (genre, tag): distinct users + applications
+--   mv_dataset_summary     one row of slow-to-compute dataset facts (Overview page)
 -- =============================================================================
 
 -- ------------------------------------------------------------- tag_stoplist
@@ -54,3 +55,18 @@ CREATE INDEX mv_popular_tags_genre_rank_idx
 
 ANALYZE tag_stoplist;
 ANALYZE mv_popular_tags_genre;
+
+
+-- ------------------------------------------------------------- mv_dataset_summary
+-- One row of dataset facts for the Overview page that are expensive to compute
+-- live (a full scan of 25M ratings for the date range takes ~5 s) and that
+-- the app cannot change: tags and genome scores are not editable, and the
+-- rating period describes the MovieLens data as loaded. Counts the app CAN
+-- change (movies, users, ratings) are read live from small tables instead.
+DROP MATERIALIZED VIEW IF EXISTS mv_dataset_summary;
+CREATE MATERIALIZED VIEW mv_dataset_summary AS
+SELECT (SELECT count(*) FROM tags)                                   AS tags,
+       (SELECT count(DISTINCT movie_id) FROM genome_scores)          AS genome_movies,
+       (SELECT min(rated_at) FROM ratings)                           AS first_rated_at,
+       (SELECT max(rated_at) FROM ratings)                           AS last_rated_at,
+       now() AT TIME ZONE 'UTC'                                      AS built_at;

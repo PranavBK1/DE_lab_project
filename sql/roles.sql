@@ -60,6 +60,9 @@ GRANT USAGE ON SCHEMA public TO movie_admin, movie_app_user;
 -- and on the sequences (needed to create new users: users_user_id_seq).
 GRANT ALL ON ALL TABLES    IN SCHEMA public TO movie_admin;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO movie_admin;
+-- Stated explicitly for the Admin page: new movies and new app accounts take
+-- their ids from these sequences (already covered by the line above).
+GRANT USAGE ON SEQUENCE movies_movie_id_seq, users_user_id_seq TO movie_admin;
 
 
 -- ------------------------------------------------------------- movie_app_user
@@ -72,7 +75,8 @@ GRANT SELECT ON movies, genres, movie_genres, ratings, tags,
 -- table, view or materialized view the queries read MUST be added here, or
 -- movie_app_user gets "permission denied" (a full reload re-runs this file).
 GRANT SELECT ON tag_stoplist,             -- junk tags excluded from question (c)
-                mv_popular_tags_genre     -- per (genre, tag) counts for question (c)
+                mv_popular_tags_genre,    -- per (genre, tag) counts for question (c)
+                mv_dataset_summary        -- dataset facts for the Overview page
       TO movie_app_user;
 
 -- users: only these 4 columns, so the app role can NEVER read password_hash

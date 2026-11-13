@@ -32,7 +32,9 @@ def run_query(name, params=None):
     """Run sql/queries/<name>.sql and return a DataFrame.
     NUMERIC columns come back as Decimal; they are converted to float."""
     with user_conn(commit=False) as conn:
-        conn.read_only = True                     # analysis never writes
+        # Analysis never writes. Transaction-local, so it cannot leak to the
+        # next user of this pooled connection.
+        conn.execute("SET TRANSACTION READ ONLY")
         cur = conn.execute(load_sql(name), params)
         columns = [c.name for c in cur.description]
         df = pd.DataFrame(cur.fetchall(), columns=columns)
@@ -120,6 +122,32 @@ def list_years():
     """Release years with movies, newest first, for the (b)/(f) dropdowns.
     Columns: release_year, movie_count."""
     return run_query("f_years")
+
+
+def overview_metrics():
+    """Overview page: movies, users, ratings, tags, genome_movies, genome_pct,
+    first_rated_at, last_rated_at (one row)."""
+    return run_query("overview_metrics")
+
+
+def genome_suggestions(limit=3):
+    """(a) Well-known movies that have genome data, for the empty state.
+    Columns: movie_id, title, release_year, rating_count."""
+    return _with_display_titles(run_query("genome_suggestions", {"limit": limit}))
+
+
+# ----------------------------------------------------------------- per-user (NEVER cache these)
+def my_ratings(user_id, limit=25, offset=0):
+    """My Ratings page: the user's ratings, newest first, one page.
+    Columns: movie_id, title, release_year, my_rating, avg_rating, rated_at, total."""
+    return _with_display_titles(
+        run_query("my_ratings", {"user_id": user_id, "limit": limit, "offset": offset}))
+
+
+def my_rating_for_movie(user_id, movie_id):
+    """The user's own rating of one movie as a float, or None if not rated."""
+    df = run_query("my_rating_for_movie", {"user_id": user_id, "movie_id": movie_id})
+    return None if df.empty else float(df.iloc[0]["rating"])
 
 
 # ----------------------------------------------------------------- (a) - (g)

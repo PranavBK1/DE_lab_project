@@ -148,11 +148,12 @@ def load_csvs(conn):
     for table, columns in TABLES:
         csv_rows[table], loaded, secs = copy_table(conn, table, columns)
         print(f"    {table:<15}{loaded:>12,}{secs:>10.1f}{loaded / secs:>12,.0f}", flush=True)
-    # tags.tag_row_id is an identity column, but COPY loaded explicit ids. Move the
-    # identity past them so the next generated id is max(tag_row_id) + 1.
-    conn.execute("""
-        SELECT setval(pg_get_serial_sequence('tags', 'tag_row_id'),
-                      (SELECT coalesce(max(tag_row_id), 0) FROM tags) + 1, false)""")
+    # tags.tag_row_id and movies.movie_id are identity columns, but COPY loaded
+    # explicit ids. Move each identity past them: next generated id = max + 1.
+    for table, column in [("tags", "tag_row_id"), ("movies", "movie_id")]:
+        conn.execute(sql.SQL(
+            "SELECT setval(pg_get_serial_sequence(%s, %s), (SELECT coalesce(max({col}), 0) FROM {tbl}) + 1, false)"
+        ).format(col=sql.Identifier(column), tbl=sql.Identifier(table)), (table, column))
     done(t0)
     return csv_rows
 
