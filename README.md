@@ -57,8 +57,17 @@ python etl/migrate.py              # apply sql/migrations/ to an already-loaded 
 ## Run the app
 ```powershell
 streamlit run app/Home.py   # login page; the dashboard pages come in Phase 7
-pytest -v tests/            # security tests (every write is rolled back)
 ```
+
+## Tests and benchmark
+```powershell
+pytest                          # everything (~45 s): security, titles, queries vs pandas
+pytest -m "not slow"            # skip the pandas comparisons that load the big CSVs (~12 s)
+python scripts/benchmark_queries.py   # every query 5x as movie_app_user -> reports/query_performance.md
+```
+Every test that writes runs in a transaction that is rolled back, so the database is
+left unchanged. The analysis queries are in `sql/queries/` and are described, with
+sample results, in [reports/query_results.md](reports/query_results.md).
 
 ## Demo accounts
 Seeded by `etl/setup_security.py`. The passwords are in `.env` (`DEMO_ADMIN_PASSWORD`,
@@ -90,10 +99,11 @@ Start `streamlit run app/Home.py` and open http://localhost:8501. Use the passwo
 ```
 data/raw/      downloaded CSVs (git-ignored)
 data/clean/    cleaned CSVs (git-ignored)
-sql/           schema, constraints, triggers, roles, migrations/, queries/ (one per question)
+sql/           schema, constraints, triggers, analysis, extensions, roles, migrations/, queries/ (one per question)
 etl/           download, clean, load, migrate, setup_security
 app/           Streamlit app (Home.py = login, pages/)
-tests/         query results checked against pandas
-reports/       cleaning, load and security reports, ER diagram
+tests/         security tests; query results checked against pandas
+scripts/       query benchmark
+reports/       cleaning, load, security, query results and performance reports; ER diagram
 slides/        presentation
 ```

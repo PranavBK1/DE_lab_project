@@ -41,7 +41,11 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - Demo accounts: admin (id 200000) and demo_user1..3 → MovieLens user_ids 1, 2, 4. Passwords only in .env.
    - App code: use user_conn(user_id) for user actions and admin_conn() on Admin pages; never the superuser. One `with` block = one transaction.
    - **Grants rule:** every new table / view / materialized view the app reads must be added BY NAME to the movie_app_user GRANT list in sql/roles.sql (no ALTER DEFAULT PRIVILEGES), and load.py must create it BEFORE setup_security runs.
-6. **Queries** (sql/queries/, one per question), each tested against pandas, each under ~2 s:
+6. **Queries** (DONE) (sql/queries/, one per question), each tested against pandas, each under ~2 s:
+   - Files: a_top_tags_for_movie, b_top_movies, c_popular_tags_by_genre, d_rating_distribution + d_movie_summary, e_ratings_per_movie_distribution + e_ratings_per_movie_summary, f_top_genre_for_year + f_years, g_genre_coverage, movie_search, genres_list. Run ONLY through app/queries.py (one function per file, read-only user_conn, returns a DataFrame).
+   - New DB objects (sql/analysis.sql, run by load.py after triggers.sql and before setup_security; granted by name in roles.sql): tag_stoplist (the ONE stop list for (c), 19 tags), mv_popular_tags_genre (distinct users + applications per genre x tag; rebuilt on every load; tags are not editable in the app).
+   - Titles: MovieLens stores "Matrix, The". Always show titles through queries.display_title(); search through queries.search_movies(), which also tries the stored form ("the matrix" -> "matrix, the").
+   - Tests: tests/test_queries.py (pandas, marked slow), tests/test_titles.py. Benchmark: scripts/benchmark_queries.py -> reports/query_performance.md. Results for slides: reports/query_results.md.
    - **movie_stats rule (applies to every query):** a movie that loses its last rating keeps its movie_stats row with rating_count = 0 and avg_rating NULL. Every query that reads movie_stats must filter on `rating_count >= threshold` (question b) or `rating_count > 0` (anything else). Movies never rated have no movie_stats row at all.
    - Always LEFT JOIN movie_stats; treat a missing row as rating_count = 0; filter rating_count >= threshold for question (b) and rating_count > 0 elsewhere; avg_rating may be NULL. (3,376 of the 62,423 movies have no ratings, so an INNER JOIN would silently drop them.)
    - a. Top-5 genome tags for a movie by relevance. Show "No genome data" when there is none.
