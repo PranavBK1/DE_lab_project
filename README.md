@@ -33,11 +33,20 @@ python etl/setup_security.py # 4. roles, grants, row-level security, demo accoun
                             #    (load.py already runs this; run it alone after editing .env)
 ```
 
-`etl/load.py` drops and reloads every table, so it is safe to re-run. The loaded
-database takes **3.4 GB** (ratings 1.9 GB and genome_scores 1.3 GB, both including
-indexes); see [reports/load_report.md](reports/load_report.md) for every table.
-The load time of the current database was not recorded (the report was added
-afterwards); the next full run writes each step's time into the report.
+`etl/load.py` drops and reloads every table, so it is safe to re-run. A full load
+takes **about 13 minutes** (762 s, measured on 2026-11-13 on this laptop) and the
+loaded database uses **3.4 GB** (3,432 MB: ratings 1.9 GB and genome_scores 1.3 GB,
+both including indexes).
+
+| step | time |
+|---|---:|
+| COPY of the 9 CSVs (41.9M rows; ratings alone 403 s) | 520 s |
+| populate movie_stats | 26 s |
+| foreign keys, indexes, ANALYZE | 71 s |
+| roles, grants, RLS, demo accounts | 1 s |
+| reconciliation (counts + movie_stats checks) | 144 s |
+
+See [reports/load_report.md](reports/load_report.md) for every step and table.
 
 Other ETL commands:
 ```powershell
@@ -64,6 +73,18 @@ and `DEMO_USER_PASSWORD` shared by the three users). They are never in this READ
 
 The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Roles,
 row-level security and the login flow are described in [reports/security.md](reports/security.md).
+
+## Manual login check
+Start `streamlit run app/Home.py` and open http://localhost:8501. Use the passwords from `.env`.
+
+1. **Admin:** log in as `admin` with `DEMO_ADMIN_PASSWORD`. You should see "Logged in as **admin** (admin)".
+2. **User:** log out, then log in as `demo_user1` with `DEMO_USER_PASSWORD`. You should see "Logged in as **demo_user1** (user)".
+3. **Wrong password:** log in as `demo_user1` with any other password. You should see "Invalid username or password." and stay on the login form.
+4. **MovieLens user with no password:** MovieLens users have no username or password. Type a MovieLens id, e.g. `3`, as the username with any password. You should see the same generic message, with no hint whether the user exists.
+5. **Logout:** log in as `demo_user1`, then click **Log out**. The login form should be back, and refreshing the page should not log you in again.
+
+## Known behaviour
+- Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id`.
 
 ## Project layout
 ```
