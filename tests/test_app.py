@@ -85,17 +85,33 @@ def test_logged_out_sees_only_login():
     assert not at.exception
 
 
+def try_switch(user, page):
+    """Try to open a page that is NOT in this user's navigation.
+    Streamlit <= 1.5x lands on the default page; newer versions refuse the switch
+    with ValueError ("Could not find a navigation page"). Both mean: no access.
+    Returns the AppTest, or None when the switch was refused."""
+    at = app_as(user)
+    try:
+        at.switch_page(f"views/{page}.py")
+    except ValueError as exc:
+        assert "Could not find a navigation page" in str(exc)
+        return None
+    return at.run()
+
+
 def test_logged_out_cannot_switch_to_a_page():
-    at = app_as(None, page="admin")
-    assert titles(at) == ["MovieLens Dashboard"]      # still the login page
-    assert not at.tabs
+    at = try_switch(None, "admin")
+    if at is not None:
+        assert titles(at) == ["MovieLens Dashboard"]      # still the login page
+        assert not at.tabs
 
 
 def test_user_has_no_admin_page():
-    at = app_as(USER, page="admin")               # not in the user's navigation
-    assert "Admin" not in titles(at)
-    assert titles(at) == ["MovieLens 25M at a glance"]
-    assert not at.exception
+    at = try_switch(USER, "admin")                # not in the user's navigation
+    if at is not None:
+        assert "Admin" not in titles(at)
+        assert titles(at) == ["MovieLens 25M at a glance"]
+        assert not at.exception
 
 
 def test_admin_view_run_directly_as_user_is_denied():
