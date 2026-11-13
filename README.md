@@ -34,17 +34,24 @@ python etl/setup_security.py # 4. roles, grants, row-level security, demo accoun
 ```
 
 `etl/load.py` drops and reloads every table, so it is safe to re-run. A full load
-takes **about 13 minutes** (762 s, measured on 2026-11-13 on this laptop) and the
-loaded database uses **3.4 GB** (3,432 MB: ratings 1.9 GB and genome_scores 1.3 GB,
-both including indexes).
+takes **13–23 minutes** on this laptop (two measured runs on 2026-11-13) and the
+loaded database uses **3.4 GB** (about 3,450 MB: ratings 1.9 GB and genome_scores
+1.3 GB, both including indexes).
 
-| step | time |
-|---|---:|
-| COPY of the 9 CSVs (41.9M rows; ratings alone 403 s) | 520 s |
-| populate movie_stats | 26 s |
-| foreign keys, indexes, ANALYZE | 71 s |
-| roles, grants, RLS, demo accounts | 1 s |
-| reconciliation (counts + movie_stats checks) | 144 s |
+| step | run 1 | run 2 |
+|---|---:|---:|
+| COPY of the 9 CSVs (41.9M rows) | 520 s | 460 s |
+| populate movie_stats | 26 s | 29 s |
+| foreign keys, indexes, ANALYZE | 71 s | 605 s |
+| analysis objects (stop list, materialized view) | – | 33 s |
+| roles, grants, RLS, demo accounts | 1 s | 2 s |
+| reconciliation (counts + movie_stats checks) | 144 s | 225 s |
+| **total** | **762 s** | **1,357 s** |
+
+The difference is almost all in the database-wide `ANALYZE` (about 10 s in run 1,
+544 s in run 2). Every index and foreign key took the same time in both runs, so the
+variation comes from the machine's disk I/O, not from the load. Run 1 predates the
+analysis-objects step.
 
 See [reports/load_report.md](reports/load_report.md) for every step and table.
 
