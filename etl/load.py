@@ -10,7 +10,11 @@ gives the same final state.
 
 Order (constraints and triggers come AFTER the data, which is much faster):
     schema.sql -> COPY 9 CSVs -> fill movie_stats -> constraints.sql -> triggers.sql
+    -> setup_security (roles.sql, role passwords, demo accounts)
     -> reconciliation -> reports/load_report.md
+
+schema.sql drops the tables, which also drops their grants, the row-level
+security policies and the demo accounts, so setup_security re-creates them.
 """
 import argparse
 import re
@@ -23,6 +27,7 @@ import psycopg
 from psycopg import sql
 
 from db import ROOT, ensure_database, get_connection, run_sql_file
+from setup_security import setup as setup_security
 
 CLEAN = ROOT / "data" / "clean"
 SQL_DIR = ROOT / "sql"
@@ -400,6 +405,10 @@ def full_load():
 
         t0 = header(6, "Create triggers (sql/triggers.sql)")
         run_sql_file(SQL_DIR / "triggers.sql", conn)
+        done(t0)
+
+        t0 = header("6b", "Roles, grants, RLS, demo accounts (etl/setup_security.py)")
+        setup_security(conn)
         done(t0)
 
         table_results, stats_results = reconcile(conn, csv_rows)

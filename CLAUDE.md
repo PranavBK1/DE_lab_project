@@ -34,10 +34,12 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - Indexes: ratings(movie_id), tags(movie_id), movie_genres(genre_id), movies(release_year), genome_scores(movie_id, relevance DESC).
    - ER diagram in reports/.
 4. **Load** (etl/load.py) (DONE): COPY, idempotent. Populate movie_stats. Print a reconciliation table and the load time. Order: schema.sql → COPY → fill movie_stats → constraints.sql → triggers.sql. Results in reports/load_report.md (a full run writes it with step timings; `--report-only` rewrites it from the live DB without reloading). Fixes to an already-loaded DB go in sql/migrations/ (applied by etl/migrate.py) AND in the source SQL files.
-5. **Roles and authentication**
-   - movie_admin: all privileges. movie_app_user: SELECT on all tables, plus INSERT and UPDATE on ratings only.
-   - bcrypt login; session state holds the role. Users rate only their own movies (`WHERE user_id = :me`). Admin page to manage movies and users.
-   - Demo accounts: 1 admin and 2–3 users mapped to real userIds. Credentials go in .env or the README, never in code.
+5. **Roles and authentication** (DONE): sql/roles.sql, etl/setup_security.py (called by load.py), app/db.py, app/auth.py, app/ratings.py, app/Home.py, tests/test_security.py, reports/security.md
+   - movie_admin: all privileges + BYPASSRLS. movie_app_user: SELECT on all tables except users (column-level SELECT without password_hash), plus INSERT (user_id, movie_id, rating, rated_at) and UPDATE (rating, rated_at) on ratings only; no DELETE.
+   - Row-level security on ratings: users can modify only their own ratings, enforced by the DATABASE via app.current_user_id (set per transaction by app/db.py user_conn).
+   - bcrypt login (cost 12) via the SECURITY DEFINER function auth_get_user; session state holds the role.
+   - Demo accounts: admin (id 200000) and demo_user1..3 → MovieLens user_ids 1, 2, 4. Passwords only in .env.
+   - App code: use user_conn(user_id) for user actions and admin_conn() on Admin pages; never the superuser. One `with` block = one transaction.
 6. **Queries** (sql/queries/, one per question), each tested against pandas, each under ~2 s:
    - **movie_stats rule (applies to every query):** a movie that loses its last rating keeps its movie_stats row with rating_count = 0 and avg_rating NULL. Every query that reads movie_stats must filter on `rating_count >= threshold` (question b) or `rating_count > 0` (anything else). Movies never rated have no movie_stats row at all.
    - Always LEFT JOIN movie_stats; treat a missing row as rating_count = 0; filter rating_count >= threshold for question (b) and rating_count > 0 elsewhere; avg_rating may be NULL. (3,376 of the 62,423 movies have no ratings, so an INNER JOIN would silently drop them.)

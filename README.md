@@ -28,7 +28,9 @@ copy .env.example .env      # then edit the passwords in .env
 python etl/download.py      # 1. download + unzip ml-25m into data/raw/
 python etl/clean.py         # 2. clean, write data/clean/ and reports/cleaning_report.md
 python etl/load.py          # 3. create tables, COPY ~41.9M rows, FKs, indexes, triggers,
-                            #    reconcile, write reports/load_report.md
+                            #    roles + demo accounts, reconcile, write reports/load_report.md
+python etl/setup_security.py # 4. roles, grants, row-level security, demo accounts
+                            #    (load.py already runs this; run it alone after editing .env)
 ```
 
 `etl/load.py` drops and reloads every table, so it is safe to re-run. The loaded
@@ -45,20 +47,32 @@ python etl/migrate.py              # apply sql/migrations/ to an already-loaded 
 
 ## Run the app
 ```powershell
-streamlit run app/Home.py   # (TODO)
+streamlit run app/Home.py   # login page; the dashboard pages come in Phase 7
+pytest -v tests/            # security tests (every write is rolled back)
 ```
 
 ## Demo accounts
-TODO (Phase 5). Passwords will be kept in `.env`.
+Seeded by `etl/setup_security.py`. The passwords are in `.env` (`DEMO_ADMIN_PASSWORD`,
+and `DEMO_USER_PASSWORD` shared by the three users). They are never in this README or in git.
+
+| username | role | MovieLens user_id | ratings at load |
+|---|---|---|---|
+| admin | admin | 200000 (new app account) | 0 |
+| demo_user1 | user | 1 | 70 |
+| demo_user2 | user | 2 | 184 |
+| demo_user3 | user | 4 | 242 |
+
+The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Roles,
+row-level security and the login flow are described in [reports/security.md](reports/security.md).
 
 ## Project layout
 ```
 data/raw/      downloaded CSVs (git-ignored)
 data/clean/    cleaned CSVs (git-ignored)
-sql/           schema, roles, triggers, queries/ (one per question)
-etl/           download, clean, load
+sql/           schema, constraints, triggers, roles, migrations/, queries/ (one per question)
+etl/           download, clean, load, migrate, setup_security
 app/           Streamlit app (Home.py = login, pages/)
 tests/         query results checked against pandas
-reports/       cleaning report, ER diagram
+reports/       cleaning, load and security reports, ER diagram
 slides/        presentation
 ```
