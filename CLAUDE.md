@@ -37,9 +37,10 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
 5. **Roles and authentication** (DONE): sql/roles.sql, etl/setup_security.py (called by load.py), app/db.py, app/auth.py, app/ratings.py, app/Home.py, tests/test_security.py, reports/security.md
    - movie_admin: all privileges + BYPASSRLS. movie_app_user: SELECT on all tables except users (column-level SELECT without password_hash), plus INSERT (user_id, movie_id, rating, rated_at) and UPDATE (rating, rated_at) on ratings only; no DELETE.
    - Row-level security on ratings: users can modify only their own ratings, enforced by the DATABASE via app.current_user_id (set per transaction by app/db.py user_conn).
-   - bcrypt login (cost 12) via the SECURITY DEFINER function auth_get_user; session state holds the role.
+   - bcrypt login (cost 12) checked INSIDE PostgreSQL by the SECURITY DEFINER function auth_login(username, password) with pgcrypto crypt(); the hash never leaves the DB. Hashes are made with crypt(%s, gen_salt('bf', 12)) in setup_security.py (Python bcrypt's $2b$ hashes do not verify in pgcrypto). Session state holds the role.
    - Demo accounts: admin (id 200000) and demo_user1..3 → MovieLens user_ids 1, 2, 4. Passwords only in .env.
    - App code: use user_conn(user_id) for user actions and admin_conn() on Admin pages; never the superuser. One `with` block = one transaction.
+   - **Grants rule:** every new table / view / materialized view the app reads must be added BY NAME to the movie_app_user GRANT list in sql/roles.sql (no ALTER DEFAULT PRIVILEGES), and load.py must create it BEFORE setup_security runs.
 6. **Queries** (sql/queries/, one per question), each tested against pandas, each under ~2 s:
    - **movie_stats rule (applies to every query):** a movie that loses its last rating keeps its movie_stats row with rating_count = 0 and avg_rating NULL. Every query that reads movie_stats must filter on `rating_count >= threshold` (question b) or `rating_count > 0` (anything else). Movies never rated have no movie_stats row at all.
    - Always LEFT JOIN movie_stats; treat a missing row as rating_count = 0; filter rating_count >= threshold for question (b) and rating_count > 0 elsewhere; avg_rating may be NULL. (3,376 of the 62,423 movies have no ratings, so an INNER JOIN would silently drop them.)

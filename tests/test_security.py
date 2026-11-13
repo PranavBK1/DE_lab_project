@@ -202,16 +202,68 @@ def test_login_movielens_user_without_password_fails(superuser_conn):
         "SELECT user_id FROM users WHERE username IS NULL AND password_hash IS NULL "
         "ORDER BY user_id LIMIT 1").fetchone()[0]
     superuser_conn.execute("UPDATE users SET username = 'ml_no_password' WHERE user_id = %s", (user_id,))
-    row = superuser_conn.execute("SELECT * FROM auth_get_user('ml_no_password')").fetchone()
-    assert row == (user_id, None, "user")
-    assert login("ml_no_password", "", conn=superuser_conn) is None
+    assert superuser_conn.execute(
+        "SELECT * FROM auth_login('ml_no_password', 'anything')").fetchone() is None
+    assert superuser_conn.execute(
+        "SELECT * FROM auth_login('ml_no_password', '')").fetchone() is None
     assert login("ml_no_password", "anything", conn=superuser_conn) is None
 
 
-def test_auth_get_user_not_executable_by_public(superuser_conn):
+# ----------------------------------------------------------------- auth_login (DB-side check)
+def test_auth_get_user_no_longer_exists():
+    """The old function returned the bcrypt hash; it has been dropped."""
+    with user_conn(commit=False) as conn:
+        with pytest.raises(errors.UndefinedFunction):
+            conn.execute("SELECT * FROM auth_get_user('demo_user1')")
+
+
+@pytest.mark.parametrize("username, password", [
+    ("demo_user1", "wrong-password"),        # wrong password
+    ("no_such_user", "anything"),            # unknown user
+    ("demo_user1", ""),                      # empty password
+    ("demo_user1", None),                    # NULL password
+])
+def test_auth_login_returns_no_row_on_failure(username, password):
+    with user_conn(commit=False) as conn:
+        assert conn.execute("SELECT * FROM auth_login(%s, %s)", (username, password)).fetchone() is None
+
+
+def test_auth_login_never_returns_a_hash():
+    with user_conn(commit=False) as conn:
+        cur = conn.execute("SELECT * FROM auth_login(%s, %s)",
+                           ("demo_user1", os.environ["DEMO_USER_PASSWORD"]))
+        assert [c.name for c in cur.description] == ["user_id", "username", "role"]
+        row = cur.fetchone()
+    assert row[1:] == ("demo_user1", "user")
+    assert not any(isinstance(v, str) and v.startswith("$2") for v in row)
+
+
+def test_auth_login_not_executable_by_public(superuser_conn):
     ok = superuser_conn.execute(
-        "SELECT has_function_privilege('public', 'auth_get_user(text)', 'EXECUTE')").fetchone()[0]
-    assert ok is False
+        "SELECT has_function_privilege('public', 'auth_login(text, text)', 'EXECUTE'), "
+        "       has_function_privilege('movie_app_user', 'auth_login(text, text)', 'EXECUTE')").fetchone()
+    assert ok == (False, True)
+
+
+def test_demo_hashes_are_pgcrypto_bcrypt_cost_12(superuser_conn):
+    """One hashing scheme: every app account was hashed by crypt(.., gen_salt('bf', 12))."""
+    prefixes = superuser_conn.execute(
+        "SELECT DISTINCT left(password_hash, 7) FROM users WHERE password_hash IS NOT NULL").fetchall()
+    assert prefixes == [("$2a$12$",)]
+
+
+# ----------------------------------------------------------------- Phase 6 grants (GAP 6)
+@pytest.mark.parametrize("relation", ["tag_stoplist", "mv_popular_tags_genre"])
+def test_app_user_can_read_analysis_objects(relation):
+    query = sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(relation))
+    with user_conn(commit=False) as conn:
+        assert conn.execute(query).fetchone()[0] > 0
+
+
+def test_app_user_cannot_change_the_stoplist():
+    with user_conn(commit=False) as conn:
+        with pytest.raises(errors.InsufficientPrivilege):
+            conn.execute("INSERT INTO tag_stoplist VALUES ('great movie')")
 
 
 def test_app_cannot_connect_as_superuser_by_mistake():

@@ -10,11 +10,13 @@ gives the same final state.
 
 Order (constraints and triggers come AFTER the data, which is much faster):
     schema.sql -> COPY 9 CSVs -> fill movie_stats -> constraints.sql -> triggers.sql
-    -> setup_security (roles.sql, role passwords, demo accounts)
+    -> analysis.sql (tag_stoplist, mv_popular_tags_genre for the Phase 6 queries)
+    -> setup_security (extensions.sql, roles.sql, role passwords, demo accounts)
     -> reconciliation -> reports/load_report.md
 
 schema.sql drops the tables, which also drops their grants, the row-level
 security policies and the demo accounts, so setup_security re-creates them.
+analysis.sql runs BEFORE setup_security because roles.sql grants on its objects.
 """
 import argparse
 import re
@@ -405,6 +407,10 @@ def full_load():
 
         t0 = header(6, "Create triggers (sql/triggers.sql)")
         run_sql_file(SQL_DIR / "triggers.sql", conn)
+        done(t0)
+
+        t0 = header("6a", "Analysis objects: stop list, materialized view (sql/analysis.sql)")
+        run_sql_file(SQL_DIR / "analysis.sql", conn)
         done(t0)
 
         t0 = header("6b", "Roles, grants, RLS, demo accounts (etl/setup_security.py)")

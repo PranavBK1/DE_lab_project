@@ -8,7 +8,7 @@ This project loads the MovieLens 25M dataset into PostgreSQL, analyses it with S
 - PostgreSQL 17: tables, DB roles, triggers
 - Python 3.11+ with pandas, SQLAlchemy and psycopg 3
 - Streamlit + Plotly for the dashboard
-- bcrypt for password hashing
+- bcrypt password hashing inside PostgreSQL (pgcrypto); the hash never reaches the app
 
 ## Prerequisites
 - Python 3.11 or newer

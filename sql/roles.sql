@@ -2,7 +2,9 @@
 -- sql/roles.sql : database roles, grants, row-level security, login lookup
 --                 (Phase 5)
 --
--- Run by etl/setup_security.py as the superuser, AFTER the tables exist.
+-- Run by etl/setup_security.py as the superuser, AFTER the tables AND the
+-- Phase 6 analysis objects (sql/analysis.sql) exist, and after
+-- sql/extensions.sql (pgcrypto, used by auth_login).
 -- Re-runnable: roles are created only if missing, grants are reset and
 -- re-applied, policies are dropped and re-created.
 -- Passwords are NOT in this file: setup_security.py sets them from .env.
@@ -66,6 +68,13 @@ GRANT SELECT ON movies, genres, movie_genres, ratings, tags,
                 links, genome_tags, genome_scores, movie_stats
       TO movie_app_user;
 
+-- Phase 6 analysis objects (sql/analysis.sql). Listed explicitly: every new
+-- table, view or materialized view the queries read MUST be added here, or
+-- movie_app_user gets "permission denied" (a full reload re-runs this file).
+GRANT SELECT ON tag_stoplist,             -- junk tags excluded from question (c)
+                mv_popular_tags_genre     -- per (genre, tag) counts for question (c)
+      TO movie_app_user;
+
 -- users: only these 4 columns, so the app role can NEVER read password_hash
 -- (SELECT password_hash ... or SELECT * fails with "permission denied").
 GRANT SELECT (user_id, username, role, created_at) ON users TO movie_app_user;
@@ -115,20 +124,41 @@ CREATE POLICY ratings_update_own ON ratings
 -- No DELETE policy (and no DELETE grant): app users cannot delete ratings.
 
 
--- ------------------------------------------------------------- login lookup
--- The app role cannot read users.password_hash, but login must compare it.
--- This function runs as its owner (SECURITY DEFINER) and returns the id, hash
--- and role for ONE username; bcrypt.checkpw then runs in Python.
--- SET search_path = public stops a caller from substituting their own "users".
-CREATE OR REPLACE FUNCTION auth_get_user(p_username text)
-RETURNS TABLE (user_id int, password_hash text, role text)
-LANGUAGE sql STABLE
+-- ------------------------------------------------------------- login check
+-- The password is checked INSIDE the database with pgcrypto's bcrypt, so the
+-- hash never leaves PostgreSQL: the app role can neither SELECT password_hash
+-- nor receive it from a function. auth_login returns (user_id, username, role)
+-- only when the password is right, and no row otherwise.
+-- SECURITY DEFINER: runs as the owner, who may read password_hash.
+-- SET search_path = public: a caller cannot substitute their own "users" or
+-- "crypt". When there is no usable hash (unknown user, or a MovieLens user
+-- with NULL password_hash), a throw-away bcrypt hash of the same cost is still
+-- computed, so the response time does not reveal whether the user exists.
+DROP FUNCTION IF EXISTS auth_get_user(text);          -- the old design returned the hash
+
+CREATE OR REPLACE FUNCTION auth_login(p_username text, p_password text)
+RETURNS TABLE (user_id int, username text, role text)
+LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public AS $$
-    SELECT u.user_id, u.password_hash, u.role
-      FROM users u
-     WHERE u.username = p_username;
+DECLARE
+    u record;
+BEGIN
+    SELECT us.user_id, us.username, us.role, us.password_hash
+      INTO u
+      FROM users us
+     WHERE us.username = p_username;
+
+    IF u.password_hash IS NULL THEN                    -- unknown user or no password
+        PERFORM crypt(coalesce(p_password, ''), gen_salt('bf', 12));
+        RETURN;
+    END IF;
+
+    IF u.password_hash = crypt(coalesce(p_password, ''), u.password_hash) THEN
+        RETURN QUERY SELECT u.user_id, u.username, u.role;
+    END IF;
+END;
 $$;
 
 -- New functions are executable by PUBLIC by default; allow only the app role.
-REVOKE EXECUTE ON FUNCTION auth_get_user(text) FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION auth_get_user(text) TO movie_app_user;
+REVOKE EXECUTE ON FUNCTION auth_login(text, text) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION auth_login(text, text) TO movie_app_user;
