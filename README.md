@@ -27,7 +27,20 @@ copy .env.example .env      # then edit the passwords in .env
 ```powershell
 python etl/download.py      # 1. download + unzip ml-25m into data/raw/
 python etl/clean.py         # 2. clean, write data/clean/ and reports/cleaning_report.md
-python etl/load.py          # 3. create schema, roles and triggers, then bulk-load (TODO)
+python etl/load.py          # 3. create tables, COPY ~41.9M rows, FKs, indexes, triggers,
+                            #    reconcile, write reports/load_report.md
+```
+
+`etl/load.py` drops and reloads every table, so it is safe to re-run. The loaded
+database takes **3.4 GB** (ratings 1.9 GB and genome_scores 1.3 GB, both including
+indexes); see [reports/load_report.md](reports/load_report.md) for every table.
+The load time of the current database was not recorded (the report was added
+afterwards); the next full run writes each step's time into the report.
+
+Other ETL commands:
+```powershell
+python etl/load.py --report-only   # rewrite the load report from the live DB, no reload (~15 s)
+python etl/migrate.py              # apply sql/migrations/ to an already-loaded DB, no reload
 ```
 
 ## Run the app

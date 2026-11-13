@@ -11,10 +11,18 @@
 --   ratings_truncate_movie_stats  statement-level, TRUNCATE (row-level triggers
 --                                 do not fire on TRUNCATE, so without this one
 --                                 movie_stats would silently keep stale totals)
+--
+-- SECURITY DEFINER: both functions run with the privileges of their OWNER
+-- (the superuser that owns the tables), not the caller. The app role
+-- movie_app_user may write only to ratings; without this, the trigger's write
+-- to movie_stats would fail with "permission denied" on every rating change.
+-- SET search_path = public stops a caller from hijacking table names by
+-- putting their own schema first on the search path.
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION movie_stats_sync() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public AS $$
 BEGIN
     -- An UPDATE that changes neither the movie nor the rating (e.g. only
     -- rated_at) does not affect the stats.
@@ -54,7 +62,8 @@ CREATE TRIGGER ratings_movie_stats
 
 -- TRUNCATE ratings removes every rating at once, so every stat is void too.
 CREATE OR REPLACE FUNCTION movie_stats_truncate() RETURNS trigger
-LANGUAGE plpgsql AS $$
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public AS $$
 BEGIN
     TRUNCATE movie_stats;
     RETURN NULL;

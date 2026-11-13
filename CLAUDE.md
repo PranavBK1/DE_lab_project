@@ -33,13 +33,14 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - movie_stats(count, sum, avg), kept current by a trigger on ratings.
    - Indexes: ratings(movie_id), tags(movie_id), movie_genres(genre_id), movies(release_year), genome_scores(movie_id, relevance DESC).
    - ER diagram in reports/.
-4. **Load** (etl/load.py) (DONE): COPY, idempotent. Populate movie_stats. Print a reconciliation table and the load time. Order: schema.sql → COPY → fill movie_stats → constraints.sql → triggers.sql. Results in reports/load_report.md.
+4. **Load** (etl/load.py) (DONE): COPY, idempotent. Populate movie_stats. Print a reconciliation table and the load time. Order: schema.sql → COPY → fill movie_stats → constraints.sql → triggers.sql. Results in reports/load_report.md (a full run writes it with step timings; `--report-only` rewrites it from the live DB without reloading). Fixes to an already-loaded DB go in sql/migrations/ (applied by etl/migrate.py) AND in the source SQL files.
 5. **Roles and authentication**
    - movie_admin: all privileges. movie_app_user: SELECT on all tables, plus INSERT and UPDATE on ratings only.
    - bcrypt login; session state holds the role. Users rate only their own movies (`WHERE user_id = :me`). Admin page to manage movies and users.
    - Demo accounts: 1 admin and 2–3 users mapped to real userIds. Credentials go in .env or the README, never in code.
 6. **Queries** (sql/queries/, one per question), each tested against pandas, each under ~2 s:
    - **movie_stats rule (applies to every query):** a movie that loses its last rating keeps its movie_stats row with rating_count = 0 and avg_rating NULL. Every query that reads movie_stats must filter on `rating_count >= threshold` (question b) or `rating_count > 0` (anything else). Movies never rated have no movie_stats row at all.
+   - Always LEFT JOIN movie_stats; treat a missing row as rating_count = 0; filter rating_count >= threshold for question (b) and rating_count > 0 elsewhere; avg_rating may be NULL. (3,376 of the 62,423 movies have no ratings, so an INNER JOIN would silently drop them.)
    - a. Top-5 genome tags for a movie by relevance. Show "No genome data" when there is none.
    - b. Top-10 by average rating, overall and per release year, from movie_stats, with an adjustable minimum-ratings threshold (default 50).
    - c. Most popular user tags per genre (ROW_NUMBER), excluding junk tags such as "in netflix queue".
@@ -52,6 +53,7 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - Controls: title autocomplete (a, d), year selector (b, f), genre selector (c), min-ratings slider (b).
    - My Ratings page. Admin page.
    - Use st.cache_data and clear it after a rating changes.
+   - The Admin page must catch ForeignKeyViolation when deleting a user and show a clear message, or offer to delete that user's ratings and tags first after confirmation. (ratings/tags FKs to users have no ON DELETE CASCADE, on purpose.)
 8. **Testing**: run all tests, click through both roles, take screenshots, write the README.
 9. **Slides**: 12–15 slides (title, problem, architecture, cleaning, ER, security, a–g, demo script, learnings).
 
