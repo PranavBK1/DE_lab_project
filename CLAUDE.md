@@ -55,7 +55,15 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - e. Histogram of rating_count per movie, on a log scale.
    - f. Genre with the most releases in a selected year. Show all genres and handle ties.
    - g. Count and % of movies per genre. Note that the %s add up to more than 100%.
-7. **Dashboard**
+7. **Dashboard** (DONE): app/Home.py (login + st.navigation by role), app/navigation.py (pages per role), app/views/ (one module per page; NOT app/pages/), app/components.py, app/charts.py, app/data.py (st.cache_data wrappers), app/admin_ops.py, .streamlit/config.toml, tests/test_app.py, scripts/page_timings.py
+   - Navigation: logged out → login only; user → Overview, (a)–(g), My ratings; admin → + Admin. Every view ALSO calls require_login() / require_role('admin') (defence in depth).
+   - Connections: one psycopg_pool per DB role (st.cache_resource); app.current_user_id is transaction-local (set_config(.., true)), so it is safe with pooling. SET TRANSACTION READ ONLY for analysis reads (never conn.read_only on pooled connections).
+   - Caching: shared reads only, through app/data.py (ttl 600). Per-user reads (my_ratings, my_rating_for_movie) are NEVER cached. After every successful write call data.clear().
+   - Admin writes only through app/admin_ops.py (admin_conn, validated, parameterised). Passwords are hashed in the DB with crypt(%s, gen_salt('bf', 12)). An admin cannot delete or demote themself.
+   - movies.movie_id is an identity column (migration 002; load.py restarts it after COPY).
+   - mv_dataset_summary (sql/analysis.sql, granted in roles.sql) holds the Overview's slow facts (tags, genome movies, rating period).
+   - client.showErrorDetails = "none" (in Streamlit 1.50, `false` means "stacktrace").
+   - OPEN: page (d) for blockbusters takes 6–10 s cold (the ratings table cannot stay in memory). Options are in reports/query_performance.md and await approval.
    - Login, then a sidebar filtered by role. One page per question, each with a chart and a "show table" toggle.
    - Controls: title autocomplete (a, d), year selector (b, f), genre selector (c), min-ratings slider (b).
    - My Ratings page. Admin page.

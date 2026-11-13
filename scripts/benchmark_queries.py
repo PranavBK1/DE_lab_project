@@ -43,6 +43,10 @@ CASES = [
     ("search: 'star' (many hits)",           "movie_search", {**search_patterns("star"), "limit": 20}),
     ("search: 'godfather' (contains)",       "movie_search", {**search_patterns("godfather"), "limit": 20}),
     ("genre list",                           "genres_list", None),
+    ("overview metrics",                     "overview_metrics", None),
+    ("(a) genome suggestions",               "genome_suggestions", {"limit": 3}),
+    ("my ratings: demo_user3, page 1",       "my_ratings", {"user_id": 4, "limit": 25, "offset": 0}),
+    ("my rating for one movie",              "my_rating_for_movie", {"user_id": 4, "movie_id": 1}),
 ]
 
 # For the report only: question (c) computed WITHOUT the materialized view,
@@ -84,7 +88,6 @@ def main():
 
     results, failures = [], []
     with user_conn(commit=False) as conn:
-        conn.read_only = True
         conn.autocommit = True                         # each query on its own, like the app
         for label, name, params in CASES:
             query = load_sql(name)
@@ -121,13 +124,22 @@ def main():
             "The query then takes each genre's top N from the index `mv_popular_tags_genre_rank_idx` (LATERAL + LIMIT) "
             "instead of sorting all 271k (genre, tag) rows, which spilled to disk and took about 1.5 s.",
             "",
-            "## Note: question (d) on a cold cache", "",
+            "## Known issue: question (d) for blockbusters", "",
             "`d_rating_distribution` reads every rating of one movie through `ratings_movie_idx`. Those rows are "
-            "spread over the 1.2 GB `ratings` table, because it is stored in user order. When the pages are already "
-            "in memory, the most-rated movie (Forrest Gump, about 81k ratings) takes roughly 0.4 s. The first run "
-            "after a restart reads from disk and has been measured at up to 2.3 s. A covering index "
-            "`ratings (movie_id, rating)` would make this an index-only scan of a few ms. It is NOT added: "
-            "it is a new index of about 0.5 GB on a 25M-row table, and needs approval.",
+            "spread over the 1.2 GB `ratings` table, because it is stored in user order. A blockbuster's ratings "
+            "sit on about 53,000 different pages (about 410 MB). This laptop has 0.8 GB of free RAM and "
+            "PostgreSQL's default shared_buffers of 128 MB, so the table cannot stay in memory. Each "
+            "blockbuster therefore takes 6–10 s (Forrest Gump, The Matrix, Toy Story), while a movie with a "
+            "few hundred ratings stays under 1 s. In Phase 6 the table happened to be in the OS cache, which "
+            "gave about 0.4 s. Fix options, each awaiting approval because each touches the 25M-row table or "
+            "the (d) definition:",
+            "",
+            "1. a covering index `ratings (movie_id, rating)` (about 0.5 GB, plus VACUUM after the load so "
+            "index-only scans need no heap reads);",
+            "2. a 10-value rating histogram per movie in `movie_stats`, kept by the existing trigger, so (d) "
+            "reads one row (no new index, the same output);",
+            "3. physically ordering `ratings` by movie (COPY sorted by movie_id, or CLUSTER), so one movie's "
+            "ratings sit on a few hundred pages.",
             ""]
     for label, plan in failures:
         out += [f"## FAIL: {label}", "", "```", plan, "```", ""]

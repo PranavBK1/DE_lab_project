@@ -1,0 +1,20 @@
+# Streamlit settings for the MovieLens dashboard.
+# Read when the app is started from the project root:  streamlit run app/Home.py
+
+[client]
+# Never show stack traces to users. "none" = generic message in the browser,
+# details only in the console. (In Streamlit 1.50 the old value `false` is
+# deprecated and means "stacktrace", which WOULD show tracebacks.)
+showErrorDetails = "none"
+# Hide the developer menu.
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f4f1"
+textColor = "#2b2b28"

@@ -63,14 +63,64 @@ python etl/migrate.py              # apply sql/migrations/ to an already-loaded 
 
 ## Run the app
 ```powershell
-streamlit run app/Home.py   # login page; the dashboard pages come in Phase 7
+streamlit run app/Home.py   # run from the project root, so .streamlit/config.toml is used
 ```
+Open http://localhost:8501 and log in with a demo account (below). The menu depends on
+the role: a user sees the Overview, the 7 question pages and **My ratings**; an admin
+also sees **Admin**. Logged out, only the login page exists.
+
+The app connects as `movie_app_user` (and `movie_admin` on the Admin page) through small
+connection pools, never as the superuser. Shared results are cached for 10 minutes,
+and every rating change or admin edit clears the cache, so all charts show the new
+numbers at once. If PostgreSQL is down, pages show "Database unavailable, please try
+again" instead of an error trace.
+
+### Pages
+| page | question | controls |
+|---|---|---|
+| Overview | dataset at a glance | links to every page |
+| (a) Tags of a movie | top-5 genome tags for a movie | movie search |
+| (b) Top-rated movies | top 10 by average rating, overall and per year | min-ratings slider, *Overall / By year* tabs, year |
+| (c) Popular tags by genre | most popular user tags per genre | genre (or all genres), tags per genre |
+| (d) Rating distribution | how a movie's ratings spread over 0.5–5.0 stars | movie search, **rate this movie** |
+| (e) Ratings per movie | histogram of ratings per movie | log-scale toggle |
+| (f) Top genre by year | genre with the most releases in a year (ties shown) | year |
+| (g) Genre coverage | count and % of movies (or ratings) per genre | share of movies / share of ratings |
+| My ratings | the user's own ratings, newest first, editable | movie search, page, select a row to edit |
+| Admin (admin only) | manage movies, accounts and ratings | tabs *Movies / Users / Ratings* |
+
+Every analysis page has a "Show data table" toggle under its chart.
+
+### Browser check list
+Use the passwords from `.env`. Steps 6–8 use *Sabrina (1995)* (12k ratings, loads in under 1 s); see
+Known behaviour for blockbusters on page (d).
+
+1. Open http://localhost:8501 while logged out. Only **Log in** is in the menu, and there is no Admin entry.
+2. Log in as `demo_user1`. The sidebar shows "Logged in as **demo_user1** (user)", and the menu has Overview, (a)–(g) and My ratings, **but no Admin**.
+3. **Overview:** the tiles show 62,423 movies, about 25.0M ratings, 1,093,350 tags, and 13,816 movies with genome data (22.1%). The links open each page.
+4. **(a):** search `the matrix`, pick *The Matrix (1999)*. You get 5 bars (dystopic future, scifi, cyberpunk, …) on a 0–1 axis. Then search `terminator: dark` and pick *Terminator: Dark Fate (2019)*, which has no genome data (it is too recent). You get the info message and 3 suggestion buttons, and clicking one loads its tags.
+5. **(b):** the overall top 10 starts with *Planet Earth II*. Move the slider to 1,000 and the list changes. In the *By year* tab, 1995 starts with *The Usual Suspects*. With the slider at 1,000, pick 1915: it should say that fewer than 10 (or no) movies qualify.
+6. **(d) rating, the live-demo moment:** search `sabrina`, pick *Sabrina (1995)*. Note the average and the count. Under **Rate this movie**, choose 5.0 and click **Save rating**. A green message shows the new average, the count goes up by 1, "Your rating" shows 5.0 ★, and the 5.0 bar grows by 1.
+7. **Cache cleared after the rating:** open **Overview**. The *Ratings* tile is exactly 1 higher than in step 3 (e.g. 25,000,096). On (g), *Share of ratings*, the Comedy and Romance rating counts in the data table also went up by 1. This works because every write clears the shared cache.
+8. **My ratings:** *Sabrina* is at the top of the list (newest first). Select its row, change the rating to 2.0 and save; the average updates again. The page explains that users cannot delete ratings.
+9. **(c), (e), (f), (g):**
+   - (c) *All genres* shows a grid of 19 small tables; choosing *Horror* gives a bar chart.
+   - (e) tick *Log scale*.
+   - (f) 1995 says Drama (297 movies); 1916 shows a tie between **Comedy and Drama**, both bars in blue.
+   - (g) switch between *Share of movies* and *Share of ratings*, and check the note saying the shares add up to more than 100%.
+10. Log out, then log in as `admin`. The menu now has **Admin**.
+11. **Admin edit:**
+    - *Movies* tab: search `sabrina`, add the genre *Drama* (or change the title), then save. A green message appears. Undo the change.
+    - *Ratings* tab: user_id `1` lists demo_user1's ratings. Set the Sabrina rating back, or delete it with the confirmation checkbox, to restore the original state.
+12. **Blocked user delete:** in *Users*, choose `demo_user2` and open **Delete this account** → **Delete account**. You should see "This user has 184 ratings and 0 tags. Delete them first?" with a confirm checkbox. **Do not confirm.** Then choose your own `admin` account: delete and demote are not offered.
+13. **Logout:** click **Log out**. You are back on the login page, and refreshing does not log you in again.
 
 ## Tests and benchmark
 ```powershell
 pytest                          # everything (~45 s): security, titles, queries vs pandas
 pytest -m "not slow"            # skip the pandas comparisons that load the big CSVs (~12 s)
 python scripts/benchmark_queries.py   # every query 5x as movie_app_user -> reports/query_performance.md
+python scripts/page_timings.py        # cold/warm load of every page -> reports/page_timings.md
 ```
 Every test that writes runs in a transaction that is rolled back, so the database is
 left unchanged. The analysis queries are in `sql/queries/` and are described, with
@@ -100,7 +150,9 @@ Start `streamlit run app/Home.py` and open http://localhost:8501. Use the passwo
 5. **Logout:** log in as `demo_user1`, then click **Log out**. The login form should be back, and refreshing the page should not log you in again.
 
 ## Known behaviour
-- Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id`.
+- Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id` and `movies.movie_id`.
+- **Page (d) for blockbusters is slow the first time (6–10 s)**, e.g. Forrest Gump, The Matrix or Toy Story. Their ratings are spread over about 53,000 pages of the 1.2 GB `ratings` table, which this laptop cannot keep in memory. After the first load, the page comes from the cache in under 0.1 s, until the next rating change clears it. A movie with a few hundred ratings takes under 1 s. The fix options are in [reports/query_performance.md](reports/query_performance.md).
+- The (c) tag counts and the Overview's tag / genome / rating-period tiles come from materialized views built at load time. An admin's genre edits show up in (c) after the next `python etl/migrate.py` or full load.
 
 ## Project layout
 ```
@@ -108,9 +160,10 @@ data/raw/      downloaded CSVs (git-ignored)
 data/clean/    cleaned CSVs (git-ignored)
 sql/           schema, constraints, triggers, analysis, extensions, roles, migrations/, queries/ (one per question)
 etl/           download, clean, load, migrate, setup_security
-app/           Streamlit app (Home.py = login, pages/)
-tests/         security tests; query results checked against pandas
-scripts/       query benchmark
+app/           Streamlit app: Home.py (login + navigation), views/ (one page each), queries, data (cache), charts, components, admin_ops
+.streamlit/    Streamlit config (theme, no error details for users)
+tests/         security, queries vs pandas, titles, app (AppTest)
+scripts/       query benchmark, page timings
 reports/       cleaning, load, security, query results and performance reports; ER diagram
 slides/        presentation
 ```
