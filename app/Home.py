@@ -17,7 +17,7 @@ import logging
 import psycopg
 import streamlit as st
 
-from auth import LOGIN_FAILED, current_user, login, logout
+from auth import LOGIN_FAILED, current_user, list_accounts, login_as, logout
 from components import show_flash
 from db import DB_UNAVAILABLE, reset_pools
 from navigation import LOGIN, pages_for
@@ -30,13 +30,13 @@ st.set_page_config(page_title="MovieLens Dashboard", page_icon="🎬", layout="w
 
 def login_page():
     st.title("MovieLens Dashboard")
-    st.caption("DS5003 Data Engineering Lab: the MovieLens 25M dataset in PostgreSQL. Please log in.")
+    st.caption("DS5003 Data Engineering Lab: the MovieLens 25M dataset in PostgreSQL. "
+               "Choose an account to log in (no password needed for this demo).")
     with st.form("login"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        username = st.selectbox("Account", list_accounts())
         submitted = st.form_submit_button("Log in", type="primary")
     if submitted:
-        user = login(username.strip(), password)
+        user = login_as(username)
         if user is None:
             st.error(LOGIN_FAILED)
         else:

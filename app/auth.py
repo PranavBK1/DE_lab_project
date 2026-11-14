@@ -37,6 +37,26 @@ def login(username, password, conn=None):
     return {"user_id": user_id, "username": name, "role": role}
 
 
+def list_accounts():
+    """App accounts that can log in (MovieLens users have no username)."""
+    with user_conn() as conn:
+        return [r[0] for r in conn.execute(
+            "SELECT username FROM users WHERE username IS NOT NULL "
+            "ORDER BY role = 'admin' DESC, username").fetchall()]
+
+
+def login_as(username):
+    """Password-free login for the local demo: pick an account, get its role.
+    Roles, row-level security and the admin/user split still apply."""
+    with user_conn() as conn:
+        row = conn.execute("SELECT user_id, username, role FROM users WHERE username = %s",
+                           (username,)).fetchone()
+    if row is None:
+        return None
+    user_id, name, role = row
+    return {"user_id": user_id, "username": name, "role": role}
+
+
 def logout():
     st.session_state.clear()
 
