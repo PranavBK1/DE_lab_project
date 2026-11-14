@@ -13,8 +13,8 @@ This project loads the MovieLens 25M dataset into PostgreSQL, analyses it with S
 3. Double-click **`setup.bat`**. It creates `.venv`, installs the packages,
    downloads MovieLens 25M, cleans it and loads PostgreSQL (about 30–45 minutes
    the first time).
-4. Double-click **`run_app.bat`** and open http://localhost:8501. Log in as
-   `admin` or `demo_user1` with the passwords from `.env`.
+4. Double-click **`run_app.bat`** and open http://localhost:8501. Choose `admin`
+   or `demo_user1` in the **Account** list and click **Log in** (no password).
 
 The same steps by hand are below under Setup, Run the pipeline and Run the app.
 
@@ -22,7 +22,7 @@ The same steps by hand are below under Setup, Run the pipeline and Run the app.
 - PostgreSQL 17: tables, DB roles, triggers
 - Python 3.11+ with pandas, SQLAlchemy and psycopg 3
 - Streamlit + Plotly for the dashboard
-- bcrypt password hashing inside PostgreSQL (pgcrypto); the hash never reaches the app
+- Login by choosing an account (no password, a demo setting); roles and row-level security are enforced by PostgreSQL. Accounts still store a bcrypt hash (pgcrypto), see Demo accounts
 
 ## Prerequisites
 - Python 3.11 or newer
@@ -106,7 +106,7 @@ again" instead of an error trace.
 Every analysis page has a "Show data table" toggle under its chart.
 
 ### Browser check list
-Use the passwords from `.env`. Steps 6–8 use *Sabrina (1995)*; any movie works, blockbusters included.
+No passwords: choose the account on the login page. Steps 6–8 use *Sabrina (1995)*; any movie works, blockbusters included.
 
 1. Open http://localhost:8501 while logged out. Only **Log in** is in the menu, and there is no Admin entry.
 2. Log in as `demo_user1`. The sidebar shows "Logged in as **demo_user1** (user)", and the menu has Overview, (a)–(g) and My ratings, **but no Admin**.
@@ -140,8 +140,20 @@ left unchanged. The analysis queries are in `sql/queries/` and are described, wi
 sample results, in [reports/query_results.md](reports/query_results.md).
 
 ## Demo accounts
-Seeded by `etl/setup_security.py`. The passwords are in `.env` (`DEMO_ADMIN_PASSWORD`,
-and `DEMO_USER_PASSWORD` shared by the three users). They are never in this README or in git.
+Seeded by `etl/setup_security.py`. **The login page asks for no password:** you choose
+one of these accounts in the **Account** list and click **Log in**. This is a
+deliberate setting for a local demo; anyone who can open the page can pick any
+account, including `admin`, so do not expose the app on a network like this.
+
+What the role decides is unchanged and still enforced by PostgreSQL: a user sees the
+Overview, (a)–(g) and only their own ratings, and can change only their own ratings;
+the admin also gets the Admin page.
+
+The accounts still have bcrypt password hashes (from `DEMO_ADMIN_PASSWORD` and
+`DEMO_USER_PASSWORD` in `.env`, which `setup_security.py` needs), and the database
+function `auth_login(username, password)` still checks them. To switch password login
+back on, make `login_page()` in `app/Home.py` call `auth.login(username, password)`
+instead of `auth.login_as(username)`.
 
 | username | role | MovieLens user_id | ratings at load |
 |---|---|---|---|
@@ -154,13 +166,17 @@ The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Roles,
 row-level security and the login flow are described in [reports/security.md](reports/security.md).
 
 ## Manual login check
-Start `streamlit run app/Home.py` and open http://localhost:8501. Use the passwords from `.env`.
+Start `streamlit run app/Home.py` and open http://localhost:8501.
 
-1. **Admin:** log in as `admin` with `DEMO_ADMIN_PASSWORD`. You should see "Logged in as **admin** (admin)".
-2. **User:** log out, then log in as `demo_user1` with `DEMO_USER_PASSWORD`. You should see "Logged in as **demo_user1** (user)".
-3. **Wrong password:** log in as `demo_user1` with any other password. You should see "Invalid username or password." and stay on the login form.
-4. **MovieLens user with no password:** MovieLens users have no username or password. Type a MovieLens id, e.g. `3`, as the username with any password. You should see the same generic message, with no hint whether the user exists.
-5. **Logout:** log in as `demo_user1`, then click **Log out**. The login form should be back, and refreshing the page should not log you in again.
+1. **Account list:** the login page shows an **Account** list with exactly `admin`, `demo_user1`, `demo_user2` and `demo_user3`, and no password box. The 162,541 MovieLens users are not offered.
+2. **Admin:** choose `admin` and click **Log in**. You should see "Logged in as **admin** (admin)" and an **Admin** entry in the menu.
+3. **User:** log out, choose `demo_user1` and log in. You should see "Logged in as **demo_user1** (user)" and **no** Admin entry.
+4. **Own data only:** as `demo_user1`, **My ratings** lists only that user's 70 ratings.
+5. **Logout:** click **Log out**. The login page should be back, and refreshing the page should not log you in again.
+
+This was checked in a real browser on 2026-11-14, including saving a rating for The
+Matrix on page (d): the count went from 72,674 to 72,675 and the 3.0 bar from 5,891
+to 5,892 at once. The test rating was deleted afterwards.
 
 ## Known behaviour
 - Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id` and `movies.movie_id`.

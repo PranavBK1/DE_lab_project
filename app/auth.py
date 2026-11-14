@@ -1,6 +1,13 @@
 """Login, logout and page guards.
 
-Login flow:
+Current login (local demo, used by app/Home.py): NO password.
+  list_accounts() gives the app accounts (admin, demo_user1..3); the visitor picks
+  one and login_as(username) returns {user_id, username, role}. Anyone who can open
+  the page can pick any account, so this is for a demo on one machine only. What
+  an account may see and do is still decided by its role and by PostgreSQL
+  (grants + row-level security).
+
+Password login (kept, tested, not used by the login page):
   1. login() connects as movie_app_user and calls auth_login(username, password),
      a SECURITY DEFINER function (sql/roles.sql).
   2. PostgreSQL checks the password with pgcrypto's bcrypt:

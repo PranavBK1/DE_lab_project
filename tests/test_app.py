@@ -85,6 +85,37 @@ def test_logged_out_sees_only_login():
     assert not at.exception
 
 
+# ----------------------------------------------------------------- password-free demo login
+def test_login_page_lists_only_app_accounts_and_has_no_password_box():
+    """The login page is an account picker: the 4 app accounts, admin first.
+    MovieLens users (no username) are never offered, and nothing asks for a password."""
+    at = app_as(None)
+    assert not at.text_input                                   # no username / password boxes
+    assert [s.label for s in at.selectbox] == ["Account"]
+    assert list(at.selectbox[0].options) == ["admin", "demo_user1", "demo_user2", "demo_user3"]
+
+
+@pytest.mark.parametrize("username, role, has_admin", [("demo_user1", "user", False),
+                                                       ("admin", "admin", True)])
+def test_picking_an_account_logs_in_with_its_role(username, role, has_admin):
+    at = app_as(None)
+    at.selectbox[0].select(username)
+    at.button[0].click().run()
+    user = at.session_state["user"]
+    assert user["username"] == username and user["role"] == role
+    assert titles(at) == ["MovieLens 25M at a glance"]         # landed on the Overview
+    assert not at.exception
+    # the role decides the menu: only an admin gets the Admin page
+    reached = try_switch(user, "admin")
+    assert (reached is not None and "Admin" in " ".join(titles(reached))) == has_admin
+
+
+def test_login_as_unknown_or_movielens_user_fails():
+    from auth import login_as
+    assert login_as("no_such_user") is None
+    assert login_as(None) is None            # MovieLens users have username NULL: never matches
+
+
 def try_switch(user, page):
     """Try to open a page that is NOT in this user's navigation.
     Streamlit <= 1.5x lands on the default page; newer versions refuse the switch

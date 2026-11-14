@@ -74,12 +74,23 @@ tables.
 
 ## 5. Login flow
 
-1. The user types a username and password into the Streamlit form (`app/Home.py`).
-2. `login()` connects as **movie_app_user** and runs `SELECT * FROM auth_login(%s, %s)`.
-3. Inside PostgreSQL: `password_hash = crypt(password, password_hash)`. The hash never leaves the database.
-4. The function returns one row `(user_id, username, role)` if the password is correct, and no row otherwise.
-5. An unknown user, a wrong password or a NULL hash all give the same message:
-   *"Invalid username or password."* When there is no hash to check, the function still computes a bcrypt hash of the same cost, so the response time does not reveal whether the user exists.
+**Current setting (local demo): no password.** The login page (`app/Home.py`) shows an
+**Account** list and a **Log in** button.
+
+1. `list_accounts()` reads the app accounts (`username IS NOT NULL`) as **movie_app_user**:
+   `admin`, `demo_user1`, `demo_user2`, `demo_user3`. MovieLens users have no username and are never offered.
+2. The visitor chooses one and clicks **Log in**.
+3. `login_as(username)` reads `(user_id, username, role)` for that username. It does not
+   read or need `password_hash` (the app role cannot read that column anyway).
+4. *Trade-off, accepted for a demo on one laptop:* anyone who can open the page can
+   choose any account, including `admin`. What a chosen account may then see and do is
+   still limited by its role and by PostgreSQL (§1, §2). Do not expose the app on a
+   network in this mode.
+5. *Password login is still available:* `auth.login(username, password)` calls
+   `auth_login` (§3), which checks `password_hash = crypt(password, password_hash)`
+   inside PostgreSQL and gives the same generic failure for an unknown user, a wrong
+   password or a NULL hash. `login_page()` can call it instead of `login_as`. The
+   tests still cover it.
 6. On success, `st.session_state["user"] = {user_id, username, role}`.
 7. Each page calls `require_login()` or `require_role("admin")`.
 8. A user's writes go through `user_conn(user_id)`, which sets `app.current_user_id` (§2).
@@ -95,7 +106,8 @@ tables.
 | demo_user2 | user | 2 | MovieLens user, 184 ratings |
 | demo_user3 | user | 4 | MovieLens user, 242 ratings |
 
-The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Passwords are in `.env`.
+The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. The login page
+needs no password (§5); the hashes are seeded from `.env` and kept for password login.
 
 ## 7. Design note: why the password is checked in the database
 
@@ -105,6 +117,36 @@ the hash of any known username and attack it offline. With `auth_login` the hash
 never leaves PostgreSQL: the app role can neither read the column nor receive the
 hash from a function, and `auth_get_user` has been dropped.
 
-## 8. Known behaviour
+## 8. Who can view what
+
+| | user (`demo_user1`–`3`) | admin |
+|---|---|---|
+| Overview and the 7 analysis pages (a)–(g) | Yes | Yes |
+| **My ratings** | Only their own ratings | Only their own ratings |
+| Another user's individual ratings | **No page shows them** | Yes: Admin → *Ratings*, by user_id |
+| Accounts and roles | No | Yes: Admin → *Users* |
+| Edit movies and genres | No | Yes: Admin → *Movies* |
+| The Admin page | Not in the menu; opening it directly shows "You do not have permission to view this page." | Yes |
+| Password hashes | No (the database refuses the column) | Yes (database role movie_admin) |
+
+How it is enforced:
+- **Menu:** `navigation.pages_for(role)` builds the menu from the role, so a user's menu has no Admin entry.
+- **Page:** every view calls `require_login()`, and the Admin view calls `require_role("admin")`.
+- **Query:** `my_ratings.sql` always filters on the logged-in `user_id`.
+- **Database:** writes to `ratings` pass row-level security (§2); only movie_admin can write other tables.
+
+One thing is open by design at the database level: movie_app_user may **read** every
+row of `ratings` (policy `ratings_select_all`). Questions (b), (d), (e) and (g) are
+aggregates over all users' ratings, so the role must be able to read them, and
+MovieLens user ids are anonymous numbers. The app itself never shows a user another
+user's individual ratings. To also block this in the database, the analysis pages
+would read only `movie_stats` and the materialized views, and the SELECT policy
+would become `user_id = current_setting('app.current_user_id')`.
+
+Checked in a real browser on 2026-11-14: `demo_user1` got 9 menu entries with no
+Admin, and My ratings listed only that user's ratings; `admin` got 10 entries
+including Admin with the tabs Movies, Users and Ratings.
+
+## 9. Known behaviour
 
 - Sequence and identity values are not transactional, so rolled-back inserts (for example by the tests) leave harmless gaps in ids such as `tags.tag_row_id`.
