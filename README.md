@@ -27,6 +27,9 @@ access that answers seven questions about movies, ratings, tags and genres.
 - [Project layout](#project-layout)
 - [Dataset licence and citation](#dataset-licence-and-citation)
 
+**Reading the code?** [CODE_GUIDE.md](CODE_GUIDE.md) explains every file and every
+function, in the order they run.
+
 ## What this project does
 
 The course brief asks for four things, and the project delivers each of them:
@@ -474,6 +477,7 @@ reports/       cleaning, load, security, query results, performance and page-tim
 setup.bat      one-time setup: environment, download, clean, load
 run_app.bat    start the dashboard
 .env.example   settings template; copy to .env (never committed)
+CODE_GUIDE.md  what every file and function does, in running order
 CLAUDE.md      project brief and phase-by-phase working notes
 data/          raw and cleaned CSVs (created by the pipeline, git-ignored)
 ```
