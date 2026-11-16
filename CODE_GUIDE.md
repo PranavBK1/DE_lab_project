@@ -41,6 +41,7 @@ flowchart TD
 |---|---|
 | `setup.bat` | One-time setup on Windows. Checks Python exists, creates `.env` from the template if missing (and stops so you can fill it in), creates `.venv`, installs the packages, then runs download, clean and load in order. Stops at the first step that fails. |
 | `run_app.bat` | Starts the dashboard. Activates `.venv`, installs any package that `requirements.txt` gained since setup, then runs `streamlit run app\Home.py`. |
+| `show_logins.bat` | Shows the four dashboard logins (username, role, password) in a window. It reads the passwords from `.env` at that moment and stores none itself, so it is safe to keep in git. |
 | `requirements.txt` | The Python packages: pandas and numpy (cleaning, tests), psycopg and psycopg-pool (PostgreSQL), python-dotenv (reads `.env`), streamlit and plotly (dashboard), pytest (tests). |
 | `.env.example` | Template for `.env`: database host, port and name, the superuser password, the passwords of the two app roles, and the demo account passwords. `.env` itself is never committed. |
 | `.gitignore` | Keeps `.env`, the data folders, `.venv` and caches out of git. |

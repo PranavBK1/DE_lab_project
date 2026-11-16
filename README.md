@@ -428,8 +428,9 @@ a password.
 | demo_user3 | user | `DEMO_USER_PASSWORD` in `.env` | 4 | 242 |
 
 The three demo users share one password. The passwords live only in `.env`, which is never
-committed, so they are not in this README or anywhere in git. To see them, run this in the
-project folder:
+committed, so they are not in this README or anywhere in git. To see them, double-click
+**`show_logins.bat`**: it prints the four usernames with their passwords in a window on
+your own screen. Or run this in the project folder:
 
 ```powershell
 findstr DEMO_ .env
@@ -482,6 +483,7 @@ reports/       cleaning, load, security, query results, performance and page-tim
 .streamlit/    Streamlit config (theme, no error details for users)
 setup.bat      one-time setup: environment, download, clean, load
 run_app.bat    start the dashboard
+show_logins.bat  show the four logins and their passwords (read from .env)
 .env.example   settings template; copy to .env (never committed)
 CODE_GUIDE.md  what every file and function does, in running order
 CLAUDE.md      project brief and phase-by-phase working notes
