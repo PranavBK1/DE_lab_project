@@ -213,9 +213,7 @@ small connection pool created once per process.
 
 | Function | What it does |
 |---|---|
-| `list_accounts()` | Returns the app accounts that can log in (`admin`, `demo_user1`–`3`). MovieLens users have no username and are never listed. |
-| `login_as(username)` | The current login: returns the chosen account's id, username and role. No password. |
-| `login(username, password, conn)` | Password login, kept and tested but not used by the login page: calls `auth_login` in the database and returns the user on success, nothing on any failure. |
+| `login(username, password, conn)` | Checks a username and password by calling `auth_login` in the database, where the bcrypt comparison happens. Returns the user's id, username and role on success, and nothing on any failure. The app never sees the password hash. |
 | `logout()` | Clears the session. |
 | `current_user()` | Returns the logged-in user from the session, or nothing. |
 | `require_login()` | Called at the top of every page: stops the page if nobody is logged in. |
@@ -236,7 +234,7 @@ reset.
 
 | Function | What it does |
 |---|---|
-| `login_page()` | Draws the login page: an Account dropdown and a Log in button. On submit it stores the user in the session and reloads. |
+| `login_page()` | Draws the login page: a Username box, a masked Password box and a Log in button. On submit it calls `auth.login`; a correct password stores the user in the session and reloads, and anything else shows "Invalid username or password." |
 | `build_navigation(user)` | Turns `pages_for(role)` into Streamlit's menu structure. |
 
 ### `app/queries.py`: the only place the app runs analysis SQL
@@ -354,7 +352,7 @@ data through `data.py` (cached) or `queries.py` (per-user), and draws with `char
 
 ## 7. Tests
 
-141 tests in total. Run with `pytest`. Every test that writes data either runs in a
+147 tests in total. Run with `pytest`. Every test that writes data either runs in a
 transaction that is rolled back or restores the original state afterwards.
 
 | File | Tests | What it checks |
@@ -363,10 +361,10 @@ transaction that is rolled back or restores the original state afterwards.
 | `tests/test_titles.py` | 4 functions | `display_title`, `stored_form` and the search patterns, without a database. |
 | `tests/test_security.py` | 29 functions | The security model. The user role can read data but not password hashes; it cannot write any table except `ratings`; it can insert and update its own ratings and the statistics follow; updating another user's rating affects 0 rows and inserting one is refused; invalid ratings are rejected by Python and by the database; new ratings get a UTC time; the admin role can do what it should; password login succeeds only with the right password and never returns a hash; the app cannot connect as the superuser by mistake. |
 | `tests/test_queries.py` | 18 functions | Every query (a)–(g) and the search, compared with the same answer computed independently in pandas from the cleaned CSVs. The pandas side never uses `movie_stats`, so these tests also prove the trigger-maintained statistics are right. Marked `slow` because they load the big CSVs. |
-| `tests/test_app.py` | 21 functions | The Streamlit app, driven by AppTest. The menu per role; the login page lists only the four accounts and has no password box; choosing an account logs in with its role; a user cannot reach Admin; every page runs without errors for both roles; saving a rating on (d) changes the count and average; the admin safety rules (cannot delete or demote yourself, a user with ratings is not deleted silently, input validation, add and delete a movie, create and delete an account). |
+| `tests/test_app.py` | 23 functions | The Streamlit app, driven by AppTest. The menu per role; the login form has a username box and a masked password box and lists no accounts; the correct password logs in with the account's role; a wrong password, unknown user or empty field is refused with one generic message; the password-free login is gone; a user cannot reach Admin; every page runs without errors for both roles; saving a rating on (d) changes the count and average; the admin safety rules (cannot delete or demote yourself, a user with ratings is not deleted silently, input validation, add and delete a movie, create and delete an account). |
 
-Some test functions run several times with different inputs, which is why 72 functions
-make 141 tests.
+Some test functions run several times with different inputs, which is why 74 functions
+make 147 tests.
 
 ---
 

@@ -85,35 +85,67 @@ def test_logged_out_sees_only_login():
     assert not at.exception
 
 
-# ----------------------------------------------------------------- password-free demo login
-def test_login_page_lists_only_app_accounts_and_has_no_password_box():
-    """The login page is an account picker: the 4 app accounts, admin first.
-    MovieLens users (no username) are never offered, and nothing asks for a password."""
+# ----------------------------------------------------------------- login form (username + password)
+def submit_login(username, password):
+    """Fill in the login form the way a visitor does and press Log in."""
     at = app_as(None)
-    assert not at.text_input                                   # no username / password boxes
-    assert [s.label for s in at.selectbox] == ["Account"]
-    assert list(at.selectbox[0].options) == ["admin", "demo_user1", "demo_user2", "demo_user3"]
-
-
-@pytest.mark.parametrize("username, role, has_admin", [("demo_user1", "user", False),
-                                                       ("admin", "admin", True)])
-def test_picking_an_account_logs_in_with_its_role(username, role, has_admin):
-    at = app_as(None)
-    at.selectbox[0].select(username)
+    at.text_input[0].input(username)
+    at.text_input[1].input(password)
     at.button[0].click().run()
+    return at
+
+
+def test_login_page_asks_for_username_and_password_and_lists_no_accounts():
+    """The form has a username box and a masked password box, and offers no list of
+    accounts: the page must not reveal which usernames exist."""
+    at = app_as(None)
+    assert [t.label for t in at.text_input] == ["Username", "Password"]
+    username_box, password_box = at.text_input[0].proto, at.text_input[1].proto
+    password_type = type(password_box).Type.Value("PASSWORD")
+    assert password_box.type == password_type        # what is typed is masked
+    assert username_box.type != password_type
+    assert not at.selectbox
+
+
+@pytest.mark.parametrize("username, password_key, role, has_admin", [
+    ("demo_user1", "DEMO_USER_PASSWORD", "user", False),
+    ("admin", "DEMO_ADMIN_PASSWORD", "admin", True)])
+def test_correct_password_logs_in_with_the_accounts_role(username, password_key, role, has_admin):
+    at = submit_login(username, os.environ[password_key])
     user = at.session_state["user"]
     assert user["username"] == username and user["role"] == role
-    assert titles(at) == ["MovieLens 25M at a glance"]         # landed on the Overview
+    assert "password_hash" not in user and "password" not in user   # nothing secret kept in the session
+    assert titles(at) == ["MovieLens 25M at a glance"]              # landed on the Overview
     assert not at.exception
     # the role decides the menu: only an admin gets the Admin page
     reached = try_switch(user, "admin")
     assert (reached is not None and "Admin" in " ".join(titles(reached))) == has_admin
 
 
-def test_login_as_unknown_or_movielens_user_fails():
-    from auth import login_as
-    assert login_as("no_such_user") is None
-    assert login_as(None) is None            # MovieLens users have username NULL: never matches
+@pytest.mark.parametrize("username, password", [
+    ("demo_user1", "not-the-password"),      # wrong password
+    ("admin", "not-the-password"),           # wrong password for the admin
+    ("no_such_user", "not-the-password"),    # unknown username
+    ("demo_user1", ""),                      # empty password
+    ("", "not-the-password"),                # empty username
+])
+def test_wrong_login_is_refused_with_one_generic_message(username, password):
+    at = submit_login(username, password)
+    assert "user" not in at.session_state                           # not logged in
+    assert [e.value for e in at.error] == ["Invalid username or password."]
+    assert titles(at) == ["MovieLens Dashboard"]                    # still on the login page
+
+
+def test_admin_password_does_not_open_a_user_account():
+    """Each account needs its own password."""
+    at = submit_login("demo_user1", os.environ["DEMO_ADMIN_PASSWORD"])
+    assert "user" not in at.session_state
+
+
+def test_there_is_no_password_free_login_left():
+    """The demo-only account picker is gone: the only way in is auth.login with a password."""
+    import auth
+    assert not hasattr(auth, "login_as") and not hasattr(auth, "list_accounts")
 
 
 def try_switch(user, page):

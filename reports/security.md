@@ -74,24 +74,22 @@ tables.
 
 ## 5. Login flow
 
-**Current setting (local demo): no password.** The login page (`app/Home.py`) shows an
-**Account** list and a **Log in** button.
+1. The user types a username and a password into the login form (`app/Home.py`). The
+   password box is masked, and the page offers no list of accounts.
+2. `login()` connects as **movie_app_user** and runs `SELECT * FROM auth_login(%s, %s)`.
+3. Inside PostgreSQL: `password_hash = crypt(password, password_hash)`. The hash never
+   leaves the database.
+4. The function returns one row `(user_id, username, role)` if the password is correct,
+   and no row otherwise.
+5. An unknown user, a wrong password, an empty field or a NULL hash all give the same
+   message, *"Invalid username or password."*, so the form does not reveal which
+   usernames exist.
+6. On success, `st.session_state["user"] = {user_id, username, role}`. Neither the
+   password nor the hash is kept in the session.
 
-1. `list_accounts()` reads the app accounts (`username IS NOT NULL`) as **movie_app_user**:
-   `admin`, `demo_user1`, `demo_user2`, `demo_user3`. MovieLens users have no username and are never offered.
-2. The visitor chooses one and clicks **Log in**.
-3. `login_as(username)` reads `(user_id, username, role)` for that username. It does not
-   read or need `password_hash` (the app role cannot read that column anyway).
-4. *Trade-off, accepted for a demo on one laptop:* anyone who can open the page can
-   choose any account, including `admin`. What a chosen account may then see and do is
-   still limited by its role and by PostgreSQL (§1, §2). Do not expose the app on a
-   network in this mode.
-5. *Password login is still available:* `auth.login(username, password)` calls
-   `auth_login` (§3), which checks `password_hash = crypt(password, password_hash)`
-   inside PostgreSQL and gives the same generic failure for an unknown user, a wrong
-   password or a NULL hash. `login_page()` can call it instead of `login_as`. The
-   tests still cover it.
-6. On success, `st.session_state["user"] = {user_id, username, role}`.
+For two days during development (14–16 November 2026) the page instead offered a list of
+accounts with no password, for demos on one laptop. That code (`login_as`,
+`list_accounts`) has been removed, and a test checks it is gone.
 7. Each page calls `require_login()` or `require_role("admin")`.
 8. A user's writes go through `user_conn(user_id)`, which sets `app.current_user_id` (§2).
    Admin pages use `admin_conn()`.
@@ -106,8 +104,9 @@ tables.
 | demo_user2 | user | 2 | MovieLens user, 184 ratings |
 | demo_user3 | user | 4 | MovieLens user, 242 ratings |
 
-The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. The login page
-needs no password (§5); the hashes are seeded from `.env` and kept for password login.
+The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. `admin` logs in
+with `DEMO_ADMIN_PASSWORD` and the three demo users share `DEMO_USER_PASSWORD`; both are
+set in `.env` and stored in the database only as bcrypt hashes.
 
 ## 7. Design note: why the password is checked in the database
 

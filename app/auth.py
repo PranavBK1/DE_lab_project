@@ -1,13 +1,6 @@
 """Login, logout and page guards.
 
-Current login (local demo, used by app/Home.py): NO password.
-  list_accounts() gives the app accounts (admin, demo_user1..3); the visitor picks
-  one and login_as(username) returns {user_id, username, role}. Anyone who can open
-  the page can pick any account, so this is for a demo on one machine only. What
-  an account may see and do is still decided by its role and by PostgreSQL
-  (grants + row-level security).
-
-Password login (kept, tested, not used by the login page):
+Login flow (username + password, used by app/Home.py):
   1. login() connects as movie_app_user and calls auth_login(username, password),
      a SECURITY DEFINER function (sql/roles.sql).
   2. PostgreSQL checks the password with pgcrypto's bcrypt:
@@ -38,26 +31,6 @@ def login(username, password, conn=None):
             row = own.execute(query, (username, password)).fetchone()
     else:
         row = conn.execute(query, (username, password)).fetchone()
-    if row is None:
-        return None
-    user_id, name, role = row
-    return {"user_id": user_id, "username": name, "role": role}
-
-
-def list_accounts():
-    """App accounts that can log in (MovieLens users have no username)."""
-    with user_conn() as conn:
-        return [r[0] for r in conn.execute(
-            "SELECT username FROM users WHERE username IS NOT NULL "
-            "ORDER BY role = 'admin' DESC, username").fetchall()]
-
-
-def login_as(username):
-    """Password-free login for the local demo: pick an account, get its role.
-    Roles, row-level security and the admin/user split still apply."""
-    with user_conn() as conn:
-        row = conn.execute("SELECT user_id, username, role FROM users WHERE username = %s",
-                           (username,)).fetchone()
     if row is None:
         return None
     user_id, name, role = row

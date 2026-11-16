@@ -17,7 +17,7 @@ import logging
 import psycopg
 import streamlit as st
 
-from auth import current_user, list_accounts, login_as, logout
+from auth import LOGIN_FAILED, current_user, login, logout
 from components import show_flash
 from db import DB_UNAVAILABLE, reset_pools
 from navigation import LOGIN, pages_for
@@ -30,15 +30,17 @@ st.set_page_config(page_title="MovieLens Dashboard", page_icon="🎬", layout="w
 
 def login_page():
     st.title("MovieLens Dashboard")
-    st.caption("DS5003 Data Engineering Lab: the MovieLens 25M dataset in PostgreSQL. "
-               "Choose an account to log in (no password needed for this demo).")
+    st.caption("DS5003 Data Engineering Lab: the MovieLens 25M dataset in PostgreSQL. Please log in.")
     with st.form("login"):
-        username = st.selectbox("Account", list_accounts())
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
         submitted = st.form_submit_button("Log in", type="primary")
     if submitted:
-        user = login_as(username)
-        if user is None:                 # the account was deleted after the list was shown
-            st.error("That account no longer exists. Refresh the page and choose another.")
+        # The password is checked inside PostgreSQL (auth_login); every failure
+        # gets the same message, so the form does not reveal which usernames exist.
+        user = login(username.strip(), password)
+        if user is None:
+            st.error(LOGIN_FAILED)
         else:
             st.session_state["user"] = user
             st.rerun()

@@ -64,13 +64,13 @@ Dataset: https://files.grouplens.org/datasets/movielens/ml-25m.zip. It has 6 fil
    - mv_dataset_summary (sql/analysis.sql, granted in roles.sql) holds the Overview's slow facts (tags, genome movies, rating period).
    - client.showErrorDetails = "none" (in Streamlit 1.50, `false` means "stacktrace").
    - (d) reads movie_stats.rating_hist (INT[10], rating_hist[k] = ratings equal to k/2 stars), maintained by the ratings trigger and guarded by CHECK sum = rating_count (migration 003; load.py fills it). This fixed the 6–10 s cold load for blockbusters.
-   - LOGIN HAS NO PASSWORD (user's decision, 2026-11-14, local demo only): the login page is an Account list (auth.list_accounts) + Log in (auth.login_as). Roles, require_login/require_role and row-level security are unchanged. Password login (auth.login → auth_login in the DB) is kept and tested but not used by the page; see reports/security.md §5 and §8 (who can view what).
+   - LOGIN IS USERNAME + PASSWORD (restored 2026-11-16 at the user's request, before any cloud deployment): app/Home.py login_page calls auth.login, which calls auth_login in the DB (bcrypt checked inside PostgreSQL). The password-free account picker used on 14-16 Nov (auth.login_as, auth.list_accounts) is removed; a test asserts it is gone. Demo passwords are DEMO_ADMIN_PASSWORD and DEMO_USER_PASSWORD in .env; never print them. See reports/security.md §5 and §8.
    - Login, then a sidebar filtered by role. One page per question, each with a chart and a "show table" toggle.
    - Controls: title autocomplete (a, d), year selector (b, f), genre selector (c), min-ratings slider (b).
    - My Ratings page. Admin page.
    - Use st.cache_data and clear it after a rating changes.
    - The Admin page must catch ForeignKeyViolation when deleting a user and show a clear message, or offer to delete that user's ratings and tags first after confirmation. (ratings/tags FKs to users have no ON DELETE CASCADE, on purpose.)
-8. **Testing, docs and slides** (DONE): full reload verified with the histogram, 141 tests passing (AppTest runs every page for both roles), 22/22 queries and 12/12 pages within target, login checked in a real browser, README quick start plus setup.bat / run_app.bat, and a 15-slide deck (Slides artifact) covering problem, architecture, cleaning, schema, load, performance, security, questions (a)–(g), findings, testing, demo script and learnings. The project is complete.
+8. **Testing, docs and slides** (DONE): full reload verified with the histogram, 147 tests passing (AppTest runs every page for both roles and logs in through the form), 22/22 queries and 12/12 pages within target, login checked in a real browser, README quick start plus setup.bat / run_app.bat, and a 15-slide deck (Slides artifact) covering problem, architecture, cleaning, schema, load, performance, security, questions (a)–(g), findings, testing, demo script and learnings. The project is complete.
 
 ## 6. Rules
 - Ask before changing the stack decisions or the Phase 6 definitions.
