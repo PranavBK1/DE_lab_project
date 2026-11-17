@@ -34,6 +34,24 @@ def env(key):
     return value
 
 
+def password_key(username):
+    """The .env key holding this demo account's password:
+    admin -> DEMO_ADMIN_PASSWORD, demo_user1 -> DEMO_USER1_PASSWORD, ..."""
+    if username in DEMO_USERS:
+        return f"DEMO_USER{username.removeprefix('demo_user')}_PASSWORD"
+    return "DEMO_ADMIN_PASSWORD"
+
+
+def demo_password(username):
+    """Each account has its own password. An older .env that only has the shared
+    DEMO_USER_PASSWORD still works for the three demo users."""
+    key = password_key(username)
+    value = os.environ.get(key, "")
+    if username in DEMO_USERS and (not value or value == "change-me"):
+        key = "DEMO_USER_PASSWORD" if os.environ.get("DEMO_USER_PASSWORD") else key
+    return env(key)
+
+
 def set_role_passwords(conn):
     # ALTER ROLE cannot take a bind parameter, so the password is passed as a
     # quoted sql.Literal (never by string formatting).
@@ -78,12 +96,12 @@ def seed_demo_accounts(conn):
         ON CONFLICT (username) DO UPDATE
            SET password_hash = EXCLUDED.password_hash, role = 'admin'
         RETURNING user_id""").format(hash=HASH),
-        (admin_name, env("DEMO_ADMIN_PASSWORD"))).fetchone()[0]
+        (admin_name, demo_password(admin_name))).fetchone()[0]
     print(f"    {admin_name:<12} role admin  user_id {admin_id}")
 
     # Users: attached to EXISTING MovieLens user_ids, so they have rating histories.
-    user_password = env("DEMO_USER_PASSWORD")
     for name, user_id in pick_demo_user_ids(conn).items():
+        user_password = demo_password(name)
         conn.execute(sql.SQL("""
             INSERT INTO users (user_id, username, password_hash, role)
             VALUES (%s, %s, {hash}, 'user')

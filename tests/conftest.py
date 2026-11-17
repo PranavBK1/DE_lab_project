@@ -28,6 +28,21 @@ def superuser_conn():
         conn.close()
 
 
+def _demo_password(username):
+    """The password of a demo login, as etl/setup_security.py seeds it:
+    DEMO_ADMIN_PASSWORD, or DEMO_USER1..3_PASSWORD (older .env: the shared DEMO_USER_PASSWORD)."""
+    if username.startswith("demo_user"):
+        own = os.environ.get(f"DEMO_USER{username.removeprefix('demo_user')}_PASSWORD", "")
+        return own if own and own != "change-me" else os.environ["DEMO_USER_PASSWORD"]
+    return os.environ["DEMO_ADMIN_PASSWORD"]
+
+
+@pytest.fixture(scope="session")
+def demo_password():
+    """demo_password("demo_user2") -> that account's password from .env."""
+    return _demo_password
+
+
 def _user_id(username):
     with user_conn(commit=False) as conn:
         row = conn.execute("SELECT user_id FROM users WHERE username = %s", (username,)).fetchone()

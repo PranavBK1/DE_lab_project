@@ -423,23 +423,21 @@ a password.
 | username | role | password is the value of | MovieLens user_id | ratings at load |
 |---|---|---|---|---|
 | admin | admin | `DEMO_ADMIN_PASSWORD` in `.env` | 200000 (new app account) | 0 |
-| demo_user1 | user | `DEMO_USER_PASSWORD` in `.env` | 1 | 70 |
-| demo_user2 | user | `DEMO_USER_PASSWORD` in `.env` | 2 | 184 |
-| demo_user3 | user | `DEMO_USER_PASSWORD` in `.env` | 4 | 242 |
+| demo_user1 | user | `DEMO_USER1_PASSWORD` in `.env` | 1 | 70 |
+| demo_user2 | user | `DEMO_USER2_PASSWORD` in `.env` | 2 | 184 |
+| demo_user3 | user | `DEMO_USER3_PASSWORD` in `.env` | 4 | 242 |
 
-The three demo users share one password. The passwords live only in `.env`, which is never
-committed, so they are not in this README or anywhere in git. To see them, double-click
-**`show_logins.bat`**: it prints the four usernames with their passwords in a window on
-your own screen. Or run this in the project folder:
+Each account has its own password, and **you choose them**. The passwords are never shown
+on the website and are not in this README or anywhere in git: they live only in `.env`
+(never committed), and the database stores only bcrypt hashes.
 
-```powershell
-findstr DEMO_ .env
-```
-
-**To change a password:** edit `DEMO_ADMIN_PASSWORD` or `DEMO_USER_PASSWORD` in `.env` (at
-least 8 characters), then run `python etl/setup_security.py`. It takes a few seconds,
-reloads no data, and the app does not need a restart. An admin can also create accounts
-and reset passwords on the Admin page.
+**To choose or change the passwords:** with PostgreSQL running, double-click
+**`set_passwords.bat`** (or run `python etl/set_passwords.py`). It asks for a password for
+each of the four accounts, twice, without showing what you type. Short, easy passwords are
+allowed. It saves them in `.env` and applies them to the database in a few seconds, without
+reloading any data. An older `.env` with one shared `DEMO_USER_PASSWORD` still works for the
+three users until you run it. An admin can also create accounts and reset passwords on the
+Admin page (there, at least 8 characters).
 
 What the role decides is enforced by PostgreSQL: a user sees the Overview, (a)–(g) and only
 their own ratings, and can change only their own ratings; the admin also gets the Admin page.
@@ -450,16 +448,16 @@ row-level security and the login flow are described in [reports/security.md](rep
 ### Manual login check
 Start `streamlit run app/Home.py` and open http://localhost:8501.
 
-1. **The form:** the login page has a **Username** box and a masked **Password** box. It offers no list of accounts.
-2. **Admin:** log in as `admin` with `DEMO_ADMIN_PASSWORD`. You should see "Logged in as **admin** (admin)" and an **Admin** entry in the menu.
-3. **User:** log out, then log in as `demo_user1` with `DEMO_USER_PASSWORD`. You should see "Logged in as **demo_user1** (user)" and **no** Admin entry.
+1. **The form:** the login page has a **Username** box and a masked **Password** box. It offers no list of accounts and shows no passwords.
+2. **Admin:** log in as `admin` with the admin password you chose. You should see "Logged in as **admin** (admin)" and an **Admin** entry in the menu.
+3. **User:** log out, then log in as `demo_user1` with its password. You should see "Logged in as **demo_user1** (user)" and **no** Admin entry.
 4. **Wrong password:** log in as `demo_user1` with any other password. You should see "Invalid username or password." and stay on the login page.
 5. **Unknown user:** any username that is not one of the four accounts gets the same message, with no hint whether the user exists. The 162,541 MovieLens users have no username or password and cannot log in.
 6. **Own data only:** as `demo_user1`, **My ratings** lists only that user's 70 ratings.
 7. **Logout:** click **Log out**. The login page should be back, and refreshing the page should not log you in again.
 
-The automated tests log in through this form with the real passwords for both roles and
-try five kinds of wrong login. In a real browser, the form and a refused wrong password
+The automated tests log in through this form with the real password of each of the four
+accounts, check that the page shows no passwords, and try five kinds of wrong login. In a real browser, the form and a refused wrong password
 were checked on 2026-11-16. Every page for both roles, and a live rating change on page
 (d), were checked on 2026-11-14.
 
@@ -471,7 +469,7 @@ were checked on 2026-11-16. Every page for both roles, and a live rating change 
 
 ## Project layout
 ```
-etl/           download, clean, load, migrate, setup_security
+etl/           download, clean, load, migrate, setup_security, set_passwords
 sql/           schema, constraints, triggers, analysis, extensions, roles,
                migrations/, queries/ (one file per question)
 app/           Streamlit app: Home.py (login + navigation), views/ (one page each),
@@ -483,7 +481,7 @@ reports/       cleaning, load, security, query results, performance and page-tim
 .streamlit/    Streamlit config (theme, no error details for users)
 setup.bat      one-time setup: environment, download, clean, load
 run_app.bat    start the dashboard
-show_logins.bat  show the four logins and their passwords (read from .env)
+set_passwords.bat  choose the four login passwords (typed hidden, saved in .env)
 .env.example   settings template; copy to .env (never committed)
 CODE_GUIDE.md  what every file and function does, in running order
 CLAUDE.md      project brief and phase-by-phase working notes

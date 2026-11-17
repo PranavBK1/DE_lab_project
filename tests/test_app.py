@@ -107,11 +107,13 @@ def test_login_page_asks_for_username_and_password_and_lists_no_accounts():
     assert not at.selectbox
 
 
-@pytest.mark.parametrize("username, password_key, role, has_admin", [
-    ("demo_user1", "DEMO_USER_PASSWORD", "user", False),
-    ("admin", "DEMO_ADMIN_PASSWORD", "admin", True)])
-def test_correct_password_logs_in_with_the_accounts_role(username, password_key, role, has_admin):
-    at = submit_login(username, os.environ[password_key])
+@pytest.mark.parametrize("username, role, has_admin", [
+    ("demo_user1", "user", False),
+    ("demo_user2", "user", False),
+    ("demo_user3", "user", False),
+    ("admin", "admin", True)])
+def test_correct_password_logs_in_with_the_accounts_role(username, role, has_admin, demo_password):
+    at = submit_login(username, demo_password(username))
     user = at.session_state["user"]
     assert user["username"] == username and user["role"] == role
     assert "password_hash" not in user and "password" not in user   # nothing secret kept in the session
@@ -136,25 +138,21 @@ def test_wrong_login_is_refused_with_one_generic_message(username, password):
     assert titles(at) == ["MovieLens Dashboard"]                    # still on the login page
 
 
-def test_admin_password_does_not_open_a_user_account():
+def test_admin_password_does_not_open_a_user_account(demo_password):
     """Each account needs its own password."""
-    at = submit_login("demo_user1", os.environ["DEMO_ADMIN_PASSWORD"])
+    at = submit_login("demo_user1", demo_password("admin"))
     assert "user" not in at.session_state
 
 
-def test_login_page_shows_the_demo_logins_from_env():
-    """The class-demo box lists admin and demo_user1-3 with the passwords from .env."""
+def test_login_page_shows_no_passwords():
+    """Nothing on the login page lists the logins or their passwords: no table, and
+    no text mentions a password (the only "Password" is the masked input's label)."""
     at = app_as(None)
-    shown = at.table[0].value
-    assert list(shown["Username"]) == ["admin", "demo_user1", "demo_user2", "demo_user3"]
-    assert list(shown["Role"]) == ["admin", "user", "user", "user"]
-    assert list(shown["Password"]) == [os.environ["DEMO_ADMIN_PASSWORD"]] + [os.environ["DEMO_USER_PASSWORD"]] * 3
-
-
-def test_demo_logins_box_can_be_hidden(monkeypatch):
-    monkeypatch.setenv("SHOW_DEMO_LOGINS", "0")
-    at = app_as(None)
-    assert not at.table
+    assert not at.table and not at.dataframe
+    page_text = " ".join(str(e.value) for kind in (at.markdown, at.caption, at.title, at.text, at.info)
+                         for e in kind)
+    assert "password" not in page_text.lower()
+    assert "demo_user" not in page_text
 
 
 def test_there_is_no_password_free_login_left():

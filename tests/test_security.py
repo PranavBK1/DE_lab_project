@@ -172,23 +172,33 @@ def test_new_rating_gets_utc_rated_at(demo1, unrated_movie):
 
 
 # ----------------------------------------------------------------- login
-def test_login_admin_succeeds():
-    user = login(os.environ["DEMO_ADMIN_USERNAME"], os.environ["DEMO_ADMIN_PASSWORD"])
+def test_login_admin_succeeds(demo_password):
+    user = login(os.environ["DEMO_ADMIN_USERNAME"], demo_password("admin"))
     assert user["role"] == "admin" and user["user_id"] >= 200000
     assert "password_hash" not in user
 
 
-def test_login_demo_user_succeeds(demo1):
-    user = login("demo_user1", os.environ["DEMO_USER_PASSWORD"])
+def test_login_demo_user_succeeds(demo1, demo_password):
+    user = login("demo_user1", demo_password("demo_user1"))
     assert user == {"user_id": demo1, "role": "user", "username": "demo_user1"}
+
+
+def test_each_demo_user_has_its_own_password(demo_password):
+    """demo_user2's password opens demo_user2, and opens demo_user1/3 only if they
+    were deliberately given the same password."""
+    for name in ("demo_user1", "demo_user2", "demo_user3"):
+        assert login(name, demo_password(name))["username"] == name
+        for other in {"demo_user1", "demo_user2", "demo_user3"} - {name}:
+            if demo_password(other) != demo_password(name):
+                assert login(other, demo_password(name)) is None
 
 
 def test_login_wrong_password_fails():
     assert login("demo_user1", "wrong-password") is None
 
 
-def test_login_unknown_user_fails():
-    assert login("no_such_user", os.environ["DEMO_USER_PASSWORD"]) is None
+def test_login_unknown_user_fails(demo_password):
+    assert login("no_such_user", demo_password("demo_user1")) is None
 
 
 def test_login_empty_input_fails():
@@ -228,10 +238,10 @@ def test_auth_login_returns_no_row_on_failure(username, password):
         assert conn.execute("SELECT * FROM auth_login(%s, %s)", (username, password)).fetchone() is None
 
 
-def test_auth_login_never_returns_a_hash():
+def test_auth_login_never_returns_a_hash(demo_password):
     with user_conn(commit=False) as conn:
         cur = conn.execute("SELECT * FROM auth_login(%s, %s)",
-                           ("demo_user1", os.environ["DEMO_USER_PASSWORD"]))
+                           ("demo_user1", demo_password("demo_user1")))
         assert [c.name for c in cur.description] == ["user_id", "username", "role"]
         row = cur.fetchone()
     assert row[1:] == ("demo_user1", "user")

@@ -104,9 +104,11 @@ accounts with no password, for demos on one laptop. That code (`login_as`,
 | demo_user2 | user | 2 | MovieLens user, 184 ratings |
 | demo_user3 | user | 4 | MovieLens user, 242 ratings |
 
-The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. `admin` logs in
-with `DEMO_ADMIN_PASSWORD` and the three demo users share `DEMO_USER_PASSWORD`; both are
-set in `.env` and stored in the database only as bcrypt hashes.
+The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Each account has its own
+password: `DEMO_ADMIN_PASSWORD`, `DEMO_USER1_PASSWORD`, `DEMO_USER2_PASSWORD` and
+`DEMO_USER3_PASSWORD` in `.env`, chosen by the project owner with `set_passwords.bat`
+(typed hidden). They are stored in the database only as bcrypt hashes and are never shown
+on the website.
 
 ## 7. Design note: why the password is checked in the database
 

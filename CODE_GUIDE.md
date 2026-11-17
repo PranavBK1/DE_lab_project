@@ -41,7 +41,7 @@ flowchart TD
 |---|---|
 | `setup.bat` | One-time setup on Windows. Checks Python exists, creates `.env` from the template if missing (and stops so you can fill it in), creates `.venv`, installs the packages, then runs download, clean and load in order. Stops at the first step that fails. |
 | `run_app.bat` | Starts the dashboard. Activates `.venv`, installs any package that `requirements.txt` gained since setup, then runs `streamlit run app\Home.py`. |
-| `show_logins.bat` | Shows the four dashboard logins (username, role, password) in a window. It reads the passwords from `.env` at that moment and stores none itself, so it is safe to keep in git. |
+| `set_passwords.bat` | Lets you choose the passwords of admin, demo_user1, demo_user2 and demo_user3. It runs `etl/set_passwords.py`, which asks for each one twice without showing what you type. |
 | `requirements.txt` | The Python packages: pandas and numpy (cleaning, tests), psycopg and psycopg-pool (PostgreSQL), python-dotenv (reads `.env`), streamlit and plotly (dashboard), pytest (tests). |
 | `.env.example` | Template for `.env`: database host, port and name, the superuser password, the passwords of the two app roles, and the demo account passwords. `.env` itself is never committed. |
 | `.gitignore` | Keeps `.env`, the data folders, `.venv` and caches out of git. |
@@ -132,10 +132,23 @@ Runs as the superuser. Called at the end of every load, and can be run alone aft
 |---|---|
 | `env(key)` | Reads a required setting from `.env` and stops with a clear message if it is missing or still "change-me". |
 | `set_role_passwords(conn)` | Sets the passwords of the two database roles from `.env`. They are never printed. |
+| `password_key(username)` | The `.env` key for an account's password: `DEMO_ADMIN_PASSWORD`, or `DEMO_USER1_PASSWORD` to `DEMO_USER3_PASSWORD`. |
+| `demo_password(username)` | Reads that account's password; falls back to the old shared `DEMO_USER_PASSWORD` for the three users if their own key is not set. |
 | `pick_demo_user_ids(conn)` | Chooses which MovieLens users become `demo_user1`–`3`: the lowest user ids with 50–300 ratings, so the demo accounts already have a rating history. Existing demo accounts keep their id. |
 | `seed_demo_accounts(conn)` | Creates or updates the `admin` account and the three demo users. Passwords are hashed with bcrypt inside PostgreSQL. |
 | `setup(conn)` | Runs `sql/extensions.sql` and `sql/roles.sql`, then the two steps above. |
 | `main()` | Opens a superuser connection and calls `setup`. |
+
+### `etl/set_passwords.py`: choose the four login passwords
+
+Run by `set_passwords.bat`. PostgreSQL must be running.
+
+| Function | What it does |
+|---|---|
+| `ask(username)` | Asks for the account's password twice with `getpass`, so nothing typed is shown; repeats until the two match and `check` accepts it. |
+| `check(password)` | Refuses only what would break `.env`: empty, leading/trailing spaces, a single quote, or "change-me". Short, easy passwords are allowed. |
+| `write_env(values)` | Replaces (or adds) the four password lines in `.env`, keeps every other line, and drops the old `DEMO_USER_PASSWORD` / `SHOW_DEMO_LOGINS` lines. |
+| `main()` | Asks for all four, writes `.env`, then runs `setup_security.main()` so the database gets the new bcrypt hashes. Prints no password. |
 
 ### `etl/migrate.py`: update a loaded database without reloading
 
