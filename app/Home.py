@@ -13,6 +13,7 @@
 - if the database is unreachable: one friendly message, details in the console
 """
 import logging
+import os
 
 import psycopg
 import streamlit as st
@@ -44,6 +45,37 @@ def login_page():
         else:
             st.session_state["user"] = user
             st.rerun()
+    show_demo_logins()
+
+
+DEMO_USERS = ("demo_user1", "demo_user2", "demo_user3")
+
+
+def demo_logins():
+    """[(username, role, password), ...] read from .env (loaded by db.py).
+
+    The passwords live only in .env, never in git. Set SHOW_DEMO_LOGINS=0 in
+    .env to hide this box (for anything other than a class demo)."""
+    if os.environ.get("SHOW_DEMO_LOGINS", "1").strip().lower() in ("0", "false", "no", "off"):
+        return []
+    admin_pw = os.environ.get("DEMO_ADMIN_PASSWORD", "")
+    user_pw = os.environ.get("DEMO_USER_PASSWORD", "")
+    rows = []
+    if admin_pw:
+        rows.append((os.environ.get("DEMO_ADMIN_USERNAME", "admin"), "admin", admin_pw))
+    if user_pw:
+        rows.extend((u, "user", user_pw) for u in DEMO_USERS)
+    return rows
+
+
+def show_demo_logins():
+    rows = demo_logins()
+    if not rows:
+        return
+    with st.container(border=True):
+        st.markdown("**Demo logins** (for the class demo)")
+        st.table({"Username": [r[0] for r in rows], "Role": [r[1] for r in rows],
+                  "Password": [r[2] for r in rows]})
 
 
 def build_navigation(user):

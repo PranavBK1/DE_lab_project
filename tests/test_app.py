@@ -142,6 +142,21 @@ def test_admin_password_does_not_open_a_user_account():
     assert "user" not in at.session_state
 
 
+def test_login_page_shows_the_demo_logins_from_env():
+    """The class-demo box lists admin and demo_user1-3 with the passwords from .env."""
+    at = app_as(None)
+    shown = at.table[0].value
+    assert list(shown["Username"]) == ["admin", "demo_user1", "demo_user2", "demo_user3"]
+    assert list(shown["Role"]) == ["admin", "user", "user", "user"]
+    assert list(shown["Password"]) == [os.environ["DEMO_ADMIN_PASSWORD"]] + [os.environ["DEMO_USER_PASSWORD"]] * 3
+
+
+def test_demo_logins_box_can_be_hidden(monkeypatch):
+    monkeypatch.setenv("SHOW_DEMO_LOGINS", "0")
+    at = app_as(None)
+    assert not at.table
+
+
 def test_there_is_no_password_free_login_left():
     """The demo-only account picker is gone: the only way in is auth.login with a password."""
     import auth
