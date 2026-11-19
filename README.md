@@ -442,7 +442,8 @@ Admin page (there, at least 8 characters).
 What the role decides is enforced by PostgreSQL: a user sees the Overview, (a)–(g) and only
 their own ratings, and can change only their own ratings; the admin also gets the Admin page.
 
-The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Roles,
+The demo users are new app accounts (ids ≥ 200000) that start with no ratings, so
+"My ratings" shows only what they rate in the app. Roles,
 row-level security and the login flow are described in [reports/security.md](reports/security.md).
 
 ### Manual login check

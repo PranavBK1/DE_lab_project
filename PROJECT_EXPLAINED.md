@@ -191,8 +191,8 @@ accounts. Run at the end of every load, and can be run alone after changing pass
 | `password_key(username)` | Says which line of `.env` holds an account's password: admin → `DEMO_ADMIN_PASSWORD`, demo_user2 → `DEMO_USER2_PASSWORD`, and so on. |
 | `demo_password(username)` | Reads that account's password (for older `.env` files it falls back to one shared `DEMO_USER_PASSWORD`). |
 | `set_role_passwords(conn)` | Sets the passwords of the two database keys (`movie_admin`, `movie_app_user`). |
-| `pick_demo_user_ids(conn)` | Chooses which real MovieLens people become demo_user1–3: the lowest ids with 50–300 ratings, so the demo accounts already have a rating history (user ids 1, 2 and 4). |
-| `seed_demo_accounts(conn)` | Creates or updates the admin account and the 3 demo users. The passwords are scrambled with bcrypt **inside PostgreSQL**; the plain password is never stored. |
+| `release_dataset_users(conn)` | Earlier, the demo users borrowed real MovieLens people (users 1, 2 and 4), so they showed ratings from 2006. This gives those people back to the dataset: they keep their ratings but nobody can log in as them. |
+| `seed_demo_accounts(conn)` | Creates or updates the admin account and the 3 demo users as brand-new accounts (ids from 200000 up). The demo users start with no ratings, so "My ratings" shows only what you rate in the app. The passwords are scrambled with bcrypt **inside PostgreSQL**; the plain password is never stored. |
 | `setup(conn)` | Does all of the above in order. |
 | `main()` | Connects as the superuser and calls `setup`. |
 

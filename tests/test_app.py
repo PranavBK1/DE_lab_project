@@ -16,7 +16,6 @@ from db import ROOT
 from navigation import pages_for
 
 HOME = str(ROOT / "app" / "Home.py")
-USER = {"user_id": 1, "username": "demo_user1", "role": "user"}
 TIMEOUT = 60
 
 ANALYSIS_VIEWS = ["overview", "a_movie_tags", "b_top_movies", "c_tags_by_genre",
@@ -28,6 +27,16 @@ def superuser():
     return psycopg.connect(host=os.environ["PG_HOST"], port=os.environ["PG_PORT"],
                            dbname=os.environ["PG_DB"], user=os.environ["PG_SUPERUSER"],
                            password=os.environ["PG_SUPERPASSWORD"])
+
+
+def _demo_user1():
+    """demo_user1 is an app account (id >= 200000), looked up rather than hard-coded."""
+    with superuser() as conn:
+        user_id = conn.execute("SELECT user_id FROM users WHERE username = 'demo_user1'").fetchone()[0]
+    return {"user_id": user_id, "username": "demo_user1", "role": "user"}
+
+
+USER = _demo_user1()
 
 
 @pytest.fixture(scope="module")
@@ -255,7 +264,7 @@ def test_overview_separates_user_tags_from_genome_tags():
     with superuser() as conn:
         user_tags, genome_tags = conn.execute(
             "SELECT (SELECT count(*) FROM tags), (SELECT count(*) FROM genome_tags)").fetchone()
-    at = app_as({"user_id": 1, "username": "demo_user1", "role": "user"})
+    at = app_as(USER)
     assert metric(at, "User tags applied") == f"{user_tags:,}"
     assert metric(at, "Genome tags") == f"{genome_tags:,}"
     assert "Tags" not in [m.label for m in at.metric]     # the ambiguous old label is gone
@@ -297,15 +306,21 @@ def test_admin_cannot_delete_or_demote_self(admin_user):
         ops.set_role(admin_user["user_id"], "user", admin_user["user_id"])
 
 
-def test_deleting_a_user_with_ratings_is_blocked(admin_user):
+def test_deleting_a_user_with_ratings_is_blocked(admin_user, small_movie):
+    # demo accounts start empty, so give demo_user1 one rating first; removed afterwards
+    me = USER["user_id"]
     with superuser() as conn:
-        n = conn.execute("SELECT count(*) FROM ratings WHERE user_id = 1").fetchone()[0]
-    with pytest.raises(ops.HasActivity) as exc:
-        ops.delete_account(1, admin_user["user_id"])
-    assert exc.value.ratings == n and "Delete them first?" in str(exc.value)
-    with superuser() as conn:                     # nothing was deleted
-        assert conn.execute("SELECT count(*) FROM ratings WHERE user_id = 1").fetchone()[0] == n
-        assert conn.execute("SELECT username FROM users WHERE user_id = 1").fetchone()[0] == "demo_user1"
+        conn.execute("INSERT INTO ratings (user_id, movie_id, rating) VALUES (%s, %s, 4.0)", (me, small_movie))
+    try:
+        with pytest.raises(ops.HasActivity) as exc:
+            ops.delete_account(me, admin_user["user_id"])
+        assert exc.value.ratings == 1 and "Delete them first?" in str(exc.value)
+        with superuser() as conn:                 # nothing was deleted
+            assert conn.execute("SELECT count(*) FROM ratings WHERE user_id = %s", (me,)).fetchone()[0] == 1
+            assert conn.execute("SELECT username FROM users WHERE user_id = %s", (me,)).fetchone()[0] == "demo_user1"
+    finally:
+        with superuser() as conn:
+            conn.execute("DELETE FROM ratings WHERE user_id = %s AND movie_id = %s", (me, small_movie))
 
 
 def test_deleting_a_movie_with_ratings_is_refused():

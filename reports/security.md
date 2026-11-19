@@ -100,11 +100,11 @@ accounts with no password, for demos on one laptop. That code (`login_as`,
 | username | role | user_id | note |
 |---|---|---|---|
 | admin | admin | 200000 | new app account (ids ≥ 200000) |
-| demo_user1 | user | 1 | MovieLens user, 70 ratings |
-| demo_user2 | user | 2 | MovieLens user, 184 ratings |
-| demo_user3 | user | 4 | MovieLens user, 242 ratings |
+| demo_user1 | user | 200028 | new app account, starts with no ratings |
+| demo_user2 | user | 200029 | new app account, starts with no ratings |
+| demo_user3 | user | 200030 | new app account, starts with no ratings |
 
-The demo users are the 3 lowest MovieLens user_ids with 50–300 ratings. Each account has its own
+The demo users are new app accounts, so they have no ratings from the dataset. Each account has its own
 password: `DEMO_ADMIN_PASSWORD`, `DEMO_USER1_PASSWORD`, `DEMO_USER2_PASSWORD` and
 `DEMO_USER3_PASSWORD` in `.env`, chosen by the project owner with `set_passwords.bat`
 (typed hidden). They are stored in the database only as bcrypt hashes and are never shown

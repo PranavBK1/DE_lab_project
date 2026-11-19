@@ -86,14 +86,18 @@ def test_own_rating_insert_and_update_keep_movie_stats_current(demo1, unrated_mo
 
 
 def test_upsert_my_rating_inserts_then_updates(demo1, unrated_movie):
-    first = upsert_my_rating(demo1, unrated_movie, 3.5, commit=False)
-    assert first[:3] == (demo1, unrated_movie, Decimal("3.5"))
-    # upsert of an EXISTING own rating goes through ON CONFLICT DO UPDATE
-    with user_conn(commit=False) as conn:
-        movie = conn.execute("SELECT movie_id FROM ratings WHERE user_id = %s LIMIT 1",
-                             (demo1,)).fetchone()[0]
-    changed = upsert_my_rating(demo1, movie, 0.5, commit=False)
-    assert changed[:3] == (demo1, movie, Decimal("0.5"))
+    # demo accounts start empty, so the first upsert is committed to make an
+    # EXISTING own rating, which the second upsert updates (ON CONFLICT DO UPDATE);
+    # the rating is removed again afterwards.
+    try:
+        first = upsert_my_rating(demo1, unrated_movie, 3.5)
+        assert first[:3] == (demo1, unrated_movie, Decimal("3.5"))
+        changed = upsert_my_rating(demo1, unrated_movie, 0.5)
+        assert changed[:3] == (demo1, unrated_movie, Decimal("0.5"))
+    finally:
+        with admin_conn() as conn:      # users cannot delete ratings; the admin role can
+            conn.execute("DELETE FROM ratings WHERE user_id = %s AND movie_id = %s",
+                         (demo1, unrated_movie))
 
 
 # ----------------------------------------------------------------- row-level security

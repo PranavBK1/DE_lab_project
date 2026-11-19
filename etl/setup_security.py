@@ -24,7 +24,7 @@ from db import ROOT, get_connection, run_sql_file
 BCRYPT_COST = 12                       # gen_salt('bf', 12): 2^12 bcrypt rounds
 HASH = sql.SQL("crypt(%s, gen_salt('bf', {}))").format(sql.Literal(BCRYPT_COST))
 DEMO_USERS = ["demo_user1", "demo_user2", "demo_user3"]
-MIN_RATINGS, MAX_RATINGS = 50, 300     # demo users get a real, readable rating history
+APP_USER_ID_START = 200000    # app accounts; MovieLens user ids are below this
 
 
 def env(key):
@@ -62,56 +62,34 @@ def set_role_passwords(conn):
         print(f"    password set for role {role}")
 
 
-def pick_demo_user_ids(conn):
-    """demo_user1..3 -> MovieLens user_ids.
-
-    An account that already exists keeps its user_id (its rating count changes
-    once it rates movies in the app). The others take the lowest user_ids that
-    have between 50 and 300 ratings and are not mapped yet.
-    """
-    existing = dict(conn.execute(
-        "SELECT username, user_id FROM users WHERE username = ANY(%s)", (DEMO_USERS,)).fetchall())
-    needed = len(DEMO_USERS) - len(existing)
-    candidates = []
-    if needed:
-        candidates = [r[0] for r in conn.execute("""
-            SELECT user_id FROM ratings
-             GROUP BY user_id
-            HAVING count(*) BETWEEN %s AND %s
-               AND NOT (user_id = ANY(%s))
-             ORDER BY user_id
-             LIMIT %s""", (MIN_RATINGS, MAX_RATINGS, list(existing.values()), needed))]
-    ids = {}
-    for name in DEMO_USERS:
-        ids[name] = existing[name] if name in existing else candidates.pop(0)
-    return ids
+def release_dataset_users(conn):
+    """Older versions attached demo_user1..3 to MovieLens users 1, 2 and 4, so
+    the accounts showed those people's 2006/2019 ratings. Detach any demo login
+    still sitting on a MovieLens id (< 200000): that user goes back to being an
+    ordinary dataset user with no login, and keeps all of its ratings."""
+    released = conn.execute("""
+        UPDATE users SET username = NULL, password_hash = NULL, role = 'user'
+         WHERE username = ANY(%s) AND user_id < %s
+        RETURNING user_id""", (DEMO_USERS, APP_USER_ID_START)).fetchall()
+    for (user_id,) in released:
+        print(f"    MovieLens user {user_id} is no longer a demo login")
 
 
 def seed_demo_accounts(conn):
-    admin_name = env("DEMO_ADMIN_USERNAME")
-    # Admin: a new app account, id from users_user_id_seq (>= 200000).
-    admin_id = conn.execute(sql.SQL("""
-        INSERT INTO users (username, password_hash, role)
-        VALUES (%s, {hash}, 'admin')
-        ON CONFLICT (username) DO UPDATE
-           SET password_hash = EXCLUDED.password_hash, role = 'admin'
-        RETURNING user_id""").format(hash=HASH),
-        (admin_name, demo_password(admin_name))).fetchone()[0]
-    print(f"    {admin_name:<12} role admin  user_id {admin_id}")
-
-    # Users: attached to EXISTING MovieLens user_ids, so they have rating histories.
-    for name, user_id in pick_demo_user_ids(conn).items():
-        user_password = demo_password(name)
-        conn.execute(sql.SQL("""
-            INSERT INTO users (user_id, username, password_hash, role)
-            VALUES (%s, %s, {hash}, 'user')
-            ON CONFLICT (user_id) DO UPDATE
-               SET username = EXCLUDED.username,
-                   password_hash = EXCLUDED.password_hash,
-                   role = 'user'""").format(hash=HASH),
-            (user_id, name, user_password))
+    """admin and demo_user1..3 are new app accounts (ids from users_user_id_seq,
+    >= 200000). The demo users start with no ratings: "My ratings" shows only
+    what they rate in the app."""
+    release_dataset_users(conn)
+    for name, role in [(env("DEMO_ADMIN_USERNAME"), "admin")] + [(u, "user") for u in DEMO_USERS]:
+        user_id = conn.execute(sql.SQL("""
+            INSERT INTO users (username, password_hash, role)
+            VALUES (%s, {hash}, %s)
+            ON CONFLICT (username) DO UPDATE
+               SET password_hash = EXCLUDED.password_hash, role = EXCLUDED.role
+            RETURNING user_id""").format(hash=HASH),
+            (name, demo_password(name), role)).fetchone()[0]
         n = conn.execute("SELECT count(*) FROM ratings WHERE user_id = %s", (user_id,)).fetchone()[0]
-        print(f"    {name:<12} role user   user_id {user_id}  ({n} ratings)")
+        print(f"    {name:<12} role {role:<5}  user_id {user_id}  ({n} ratings)")
 
 
 def setup(conn):

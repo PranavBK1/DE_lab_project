@@ -134,8 +134,8 @@ Runs as the superuser. Called at the end of every load, and can be run alone aft
 | `set_role_passwords(conn)` | Sets the passwords of the two database roles from `.env`. They are never printed. |
 | `password_key(username)` | The `.env` key for an account's password: `DEMO_ADMIN_PASSWORD`, or `DEMO_USER1_PASSWORD` to `DEMO_USER3_PASSWORD`. |
 | `demo_password(username)` | Reads that account's password; falls back to the old shared `DEMO_USER_PASSWORD` for the three users if their own key is not set. |
-| `pick_demo_user_ids(conn)` | Chooses which MovieLens users become `demo_user1`–`3`: the lowest user ids with 50–300 ratings, so the demo accounts already have a rating history. Existing demo accounts keep their id. |
-| `seed_demo_accounts(conn)` | Creates or updates the `admin` account and the three demo users. Passwords are hashed with bcrypt inside PostgreSQL. |
+| `release_dataset_users(conn)` | Older versions attached the demo logins to MovieLens users 1, 2 and 4. This detaches any demo login still on a MovieLens id (< 200000); that user keeps its ratings but can no longer log in. |
+| `seed_demo_accounts(conn)` | Creates or updates `admin` and `demo_user1`–`3` as new app accounts (ids ≥ 200000). The demo users start with no ratings. Passwords are hashed with bcrypt inside PostgreSQL. |
 | `setup(conn)` | Runs `sql/extensions.sql` and `sql/roles.sql`, then the two steps above. |
 | `main()` | Opens a superuser connection and calls `setup`. |
 
