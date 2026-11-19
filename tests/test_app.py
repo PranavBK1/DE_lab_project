@@ -310,13 +310,14 @@ def test_deleting_a_user_with_ratings_is_blocked(admin_user, small_movie):
     # demo accounts start empty, so give demo_user1 one rating first; removed afterwards
     me = USER["user_id"]
     with superuser() as conn:
+        before = conn.execute("SELECT count(*) FROM ratings WHERE user_id = %s", (me,)).fetchone()[0]
         conn.execute("INSERT INTO ratings (user_id, movie_id, rating) VALUES (%s, %s, 4.0)", (me, small_movie))
     try:
         with pytest.raises(ops.HasActivity) as exc:
             ops.delete_account(me, admin_user["user_id"])
-        assert exc.value.ratings == 1 and "Delete them first?" in str(exc.value)
+        assert exc.value.ratings == before + 1 and "Delete them first?" in str(exc.value)
         with superuser() as conn:                 # nothing was deleted
-            assert conn.execute("SELECT count(*) FROM ratings WHERE user_id = %s", (me,)).fetchone()[0] == 1
+            assert conn.execute("SELECT count(*) FROM ratings WHERE user_id = %s", (me,)).fetchone()[0] == before + 1
             assert conn.execute("SELECT username FROM users WHERE user_id = %s", (me,)).fetchone()[0] == "demo_user1"
     finally:
         with superuser() as conn:
@@ -365,3 +366,28 @@ def test_create_login_and_delete_account(admin_user):
     finally:
         ops.delete_account(user_id, admin_user["user_id"])
     assert login("phase7_test", "a-long-password") is None
+
+
+def test_admin_ratings_tab_opens_on_an_app_account(admin_user):
+    """The Ratings tab starts on an app account (ids >= 200000), not on a MovieLens
+    user from the dataset, so it never opens on someone's 2006 ratings."""
+    at = app_as(admin_user, page="admin")
+    account = next(s for s in at.selectbox if s.key == "admin_ratings_account")
+    assert account.value >= 200000
+    assert not [n for n in at.number_input if n.key == "admin_ratings_user"]
+    at.radio(key="admin_ratings_source").set_value("MovieLens user (by id)").run()
+    assert not at.exception
+    assert any(n.key == "admin_ratings_user" for n in at.number_input)
+
+
+def test_admin_ratings_list_only_app_ratings():
+    """The Ratings tab lists only ratings made in the app (2026 onwards), never the
+    dataset's 1995-2019 ratings, even for a MovieLens user who has many of them."""
+    with superuser() as conn:
+        dataset_n, app_n = conn.execute(
+            "SELECT count(*) FILTER (WHERE rated_at < %s), count(*) FILTER (WHERE rated_at >= %s) "
+            "FROM ratings WHERE user_id = 1", (ops.APP_RATINGS_SINCE, ops.APP_RATINGS_SINCE)).fetchone()
+    assert dataset_n > 0                                # user 1 does have dataset ratings...
+    rows = ops.user_ratings(1)
+    assert len(rows) == app_n                           # ...but none of them are listed
+    assert all(r["rated_at"] >= ops.APP_RATINGS_SINCE for r in rows)

@@ -46,7 +46,14 @@ def movie_genres(genres):
 
 @pytest.fixture(scope="session")
 def ratings():
+    """ratings.csv plus the ratings made in the app by app accounts (ids >= 200000),
+    so rating something in the dashboard does not break these comparisons."""
     r = read("ratings", ["movie_id", "rating"], {"movie_id": "int32", "rating": "float32"})
+    with user_conn(commit=False) as conn:
+        app = conn.execute("SELECT movie_id, rating FROM ratings WHERE user_id >= 200000").fetchall()
+    if app:
+        r = pd.concat([r, pd.DataFrame(app, columns=["movie_id", "rating"]).astype(
+            {"movie_id": "int32", "rating": "float32"})], ignore_index=True)
     r["halves"] = (r["rating"] * 2).round().astype("int8")      # 0.5..5.0 -> 1..10, exact
     return r[["movie_id", "halves"]]
 

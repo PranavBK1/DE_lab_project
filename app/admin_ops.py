@@ -4,6 +4,8 @@ All SQL is parameterised. Inputs are validated here, so the Admin page and
 the tests share the same rules. Each function is one transaction. Problems
 the user can fix raise AdminError with a message to show.
 """
+from datetime import datetime
+
 from psycopg import errors
 
 from db import admin_conn
@@ -13,6 +15,7 @@ MIN_YEAR, MAX_YEAR = 1870, 2030
 MIN_PASSWORD = 8
 ROLES = ("user", "admin")
 APP_USER_ID_START = 200000      # ids below this are MovieLens users
+APP_RATINGS_SINCE = datetime(2026, 1, 1)   # the app was built in 2026; earlier ratings are the dataset's
 
 
 class AdminError(ValueError):
@@ -204,15 +207,16 @@ def delete_account(user_id, acting_user_id, delete_activity=False):
 
 
 # ----------------------------------------------------------------- ratings
-def user_ratings(user_id, limit=200):
-    """Any user's ratings (newest first), for the Ratings tab."""
+def user_ratings(user_id, limit=200, since=APP_RATINGS_SINCE):
+    """A user's ratings made in the app (rated_at on or after `since`, 1 Jan 2026),
+    newest first, for the Ratings tab. The dataset's 1995-2019 ratings are not listed."""
     with admin_conn() as conn:
         cur = conn.execute("""
             SELECT r.movie_id, m.title, m.release_year, r.rating, r.rated_at
               FROM ratings r JOIN movies m ON m.movie_id = r.movie_id
-             WHERE r.user_id = %s
+             WHERE r.user_id = %s AND r.rated_at >= %s
              ORDER BY r.rated_at DESC, r.movie_id
-             LIMIT %s""", (user_id, limit))
+             LIMIT %s""", (user_id, since, limit))
         columns = [c.name for c in cur.description]
         return [dict(zip(columns, row)) for row in cur.fetchall()]
 

@@ -153,13 +153,28 @@ with users_tab:
 # ================================================================= Ratings
 with ratings_tab:
     st.subheader("Look up a user's ratings")
-    user_id = st.number_input("user_id", min_value=1, value=1, step=1, key="admin_ratings_user")
+    st.caption(f"Only ratings made in this app are listed (from "
+               f"{ops.APP_RATINGS_SINCE:%d %b %Y}). The dataset's 1995–2019 ratings are not shown.")
+    # Default: the app's own accounts. Any MovieLens user can be looked up by id too,
+    # but only the ratings they were given in the app (2026 onwards) are listed.
+    source = st.radio("Whose ratings", ["App account", "MovieLens user (by id)"], horizontal=True,
+                      key="admin_ratings_source")
+    if source == "App account":
+        ids = list(by_id)
+        first_user = next((i for i in ids if by_id[i]["role"] == "user"), ids[0])
+        user_id = st.selectbox("Account", ids, index=ids.index(first_user),
+                               format_func=lambda i: f"{by_id[i]['username']} (id {i})",
+                               key="admin_ratings_account")
+    else:
+        user_id = st.number_input("MovieLens user_id (1 to 162,541)", min_value=1,
+                                  max_value=ops.APP_USER_ID_START - 1, value=1, step=1,
+                                  key="admin_ratings_user")
     rows = ops.user_ratings(int(user_id))
     if not rows:
-        st.info(f"User {user_id} has no ratings.")
+        st.info(f"User {user_id} has no ratings made in the app.")
     else:
-        st.caption(f"{len(rows)} most recent ratings of user {user_id}." if len(rows) == 200
-                   else f"{len(rows)} ratings of user {user_id}, newest first.")
+        st.caption(f"{len(rows)} most recent app ratings of user {user_id}." if len(rows) == 200
+                   else f"{len(rows)} app ratings of user {user_id}, newest first.")
         st.dataframe(rows, hide_index=True, column_config={
             "rated_at": st.column_config.DatetimeColumn("rated (UTC)", format="YYYY-MM-DD HH:mm")})
         labels = {r["movie_id"]: f"{r['title']}{fmt_year(r['release_year'])}: {float(r['rating']):.1f}"
