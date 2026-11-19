@@ -125,7 +125,7 @@ def list_years():
 
 
 def overview_metrics():
-    """Overview page: movies, users, ratings, tags, genome_movies, genome_pct,
+    """Overview page: movies, users, ratings, tags, genome_tags, genome_movies, genome_pct,
     first_rated_at, last_rated_at (one row)."""
     return run_query("overview_metrics")
 

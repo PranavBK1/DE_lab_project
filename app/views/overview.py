@@ -17,11 +17,17 @@ metric_row([
     ("Movies", fmt_int(m["movies"])),
     ("Users", fmt_int(m["users"]), "MovieLens users plus the app's own accounts"),
     ("Ratings", fmt_int(m["ratings"]), "0.5 to 5.0 stars; includes ratings made in this app"),
-    ("Tags", fmt_int(m["tags"]), "free-text tags that users applied to movies"),
+    ("User tags applied", fmt_int(m["tags"]),
+     "Free-text tags that users typed on movies (tags.csv), e.g. “funny”. "
+     "Not the same as the genome tags."),
 ])
 metric_row([
-    ("Movies with genome data", f"{fmt_int(m['genome_movies'])} ({m['genome_pct']:.1f}%)",
-     "The Tag Genome scores 1,128 tags for each of these movies"),
+    ("Genome tags", fmt_int(m["genome_tags"]),
+     "The fixed vocabulary of the Tag Genome (genome-tags.csv). Each of them gets a "
+     "relevance score from 0 to 1 for every genome movie; question (a) uses these."),
+    ("Movies with genome data", fmt_int(m["genome_movies"]),
+     f"{m['genome_pct']:.1f}% of all movies. These have a relevance score for every genome "
+     "tag; GroupLens computed the genome only for movies with enough ratings and tags."),
     ("Ratings from", f"{m['first_rated_at']:%d %b %Y}"),
     ("Ratings until", f"{m['last_rated_at']:%d %b %Y}", "Last rating in the MovieLens data"),
 ])

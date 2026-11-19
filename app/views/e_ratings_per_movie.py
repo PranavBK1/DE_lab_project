@@ -17,8 +17,9 @@ metric_row([
     ("Median ratings per movie", fmt_int(s["median"])),
     ("Mean ratings per movie", f"{s['mean']:,.1f}"),
     ("Most ratings for one movie", fmt_int(s["max"])),
-    (f"Share of all ratings for the top 10% ({fmt_int(s['top10pct_movies'])} movies)",
-     f"{s['top10pct_share_pct']:.1f}%"),
+    ("Ratings going to the top 10%", f"{s['top10pct_share_pct']:.1f}%",
+     f"Share of all ratings received by the {fmt_int(s['top10pct_movies'])} most-rated movies "
+     "(the top 10% of all movies)."),
 ])
 st.markdown(f"**A long tail:** half of all movies have {fmt_int(s['median'])} ratings or fewer, "
             f"while the most-rated 10% of movies received {s['top10pct_share_pct']:.1f}% of all ratings.")

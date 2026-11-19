@@ -249,6 +249,18 @@ def metric(at, label):
     return next(m.value for m in at.metric if m.label == label)
 
 
+def test_overview_separates_user_tags_from_genome_tags():
+    """'User tags applied' (rows of tags) and 'Genome tags' (the genome vocabulary)
+    are different things; the Overview labels and counts them separately."""
+    with superuser() as conn:
+        user_tags, genome_tags = conn.execute(
+            "SELECT (SELECT count(*) FROM tags), (SELECT count(*) FROM genome_tags)").fetchone()
+    at = app_as({"user_id": 1, "username": "demo_user1", "role": "user"})
+    assert metric(at, "User tags applied") == f"{user_tags:,}"
+    assert metric(at, "Genome tags") == f"{genome_tags:,}"
+    assert "Tags" not in [m.label for m in at.metric]     # the ambiguous old label is gone
+
+
 def test_d_rating_flow_updates_the_average(small_movie):
     """Save a rating on page (d): the shown count and average change.
     Teardown deletes the rating as superuser; the trigger restores movie_stats."""
